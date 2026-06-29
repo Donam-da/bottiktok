@@ -289,7 +289,7 @@ def is_user_blocked(user_id):
     return user_id in blocklist
 
 def check_daily_limit(user_id, platform='tiktok'):
-    """Kiểm tra user đã vượt giới hạn ngày chưa (phân biệt TikTok và Facebook)"""
+    """Kiểm tra user đã vượt giới hạn 24h chưa (phân biệt TikTok và Facebook)"""
     # Admin không bị giới hạn
     if user_id == ADMIN_ID:
         return True, 0
@@ -298,44 +298,50 @@ def check_daily_limit(user_id, platform='tiktok'):
     if is_user_authorized(user_id):
         # User đã có pass trong notification_credentials.json (đọc từ Gist)
         if platform == 'tiktok':
-            daily_limit = 4  # TikTok: 4 video/ngày
+            daily_limit = 4  # TikTok: 4 video/24h
         elif platform == 'facebook':
-            daily_limit = 2  # Facebook: 2 video/ngày
+            daily_limit = 2  # Facebook: 2 video/24h
         elif platform == 'youtube':
-            daily_limit = 5  # YouTube: 5 video/ngày
+            daily_limit = 5  # YouTube: 5 video/24h
         else:
             daily_limit = 4  # Mặc định
     elif is_user_public(user_id):
         # User public mode (user lạ tạm thời)
-        daily_limit = 1  # Cả TikTok, Facebook, YouTube: 1 video/ngày
+        daily_limit = 1  # Cả TikTok, Facebook, YouTube: 1 video/24h
     else:
         # User hoàn toàn lạ (không có trong Gist)
         if platform == 'tiktok':
-            daily_limit = 1  # TikTok: 1 video/ngày
+            daily_limit = 1  # TikTok: 1 video/24h
         elif platform == 'youtube':
-            daily_limit = 1  # YouTube: 1 video/ngày
+            daily_limit = 1  # YouTube: 1 video/24h
         else:
             daily_limit = 1  # Mặc định
     
     user_id_str = str(user_id)
-    today = str(date.today())
+    current_time = time.time()
     
     data = load_usage_data()
     
-    # Reset count nếu ngày mới
-    if user_id_str not in data or data[user_id_str].get('date') != today:
-        data[user_id_str] = {'date': today, 'tiktok_count': 0, 'facebook_count': 0, 'youtube_count': 0}
+    # Khởi tạo data nếu chưa có
+    if user_id_str not in data:
+        data[user_id_str] = {
+            'tiktok_count': 0, 'tiktok_reset_time': 0,
+            'facebook_count': 0, 'facebook_reset_time': 0,
+            'youtube_count': 0, 'youtube_reset_time': 0
+        }
         save_usage_data(data)
     
-    # Lấy count theo nền tảng
-    if platform == 'tiktok':
-        count = data[user_id_str].get('tiktok_count', 0)
-    elif platform == 'facebook':
-        count = data[user_id_str].get('facebook_count', 0)
-    elif platform == 'youtube':
-        count = data[user_id_str].get('youtube_count', 0)
-    else:
-        count = data[user_id_str].get('tiktok_count', 0) + data[user_id_str].get('facebook_count', 0)
+    # Kiểm tra và reset count nếu đã qua 24h cho nền tảng cụ thể
+    reset_time_key = f'{platform}_reset_time'
+    count_key = f'{platform}_count'
+    
+    reset_time = data[user_id_str].get(reset_time_key, 0)
+    if current_time - reset_time >= 86400:  # 86400 giây = 24h
+        data[user_id_str][count_key] = 0
+        data[user_id_str][reset_time_key] = current_time
+        save_usage_data(data)
+    
+    count = data[user_id_str].get(count_key, 0)
     
     if count >= daily_limit:
         return False, count
@@ -348,20 +354,28 @@ def increment_usage(user_id, platform='tiktok'):
         return
     
     user_id_str = str(user_id)
-    today = str(date.today())
+    current_time = time.time()
     
     data = load_usage_data()
     
-    if user_id_str not in data or data[user_id_str].get('date') != today:
-        data[user_id_str] = {'date': today, 'tiktok_count': 0, 'facebook_count': 0, 'youtube_count': 0}
+    # Khởi tạo data nếu chưa có
+    if user_id_str not in data:
+        data[user_id_str] = {
+            'tiktok_count': 0, 'tiktok_reset_time': 0,
+            'facebook_count': 0, 'facebook_reset_time': 0,
+            'youtube_count': 0, 'youtube_reset_time': 0
+        }
     
-    # Tăng count theo nền tảng
+    # Tăng count theo nền tảng và cập nhật reset_time mỗi lần
     if platform == 'tiktok':
         data[user_id_str]['tiktok_count'] = data[user_id_str].get('tiktok_count', 0) + 1
+        data[user_id_str]['tiktok_reset_time'] = current_time
     elif platform == 'facebook':
         data[user_id_str]['facebook_count'] = data[user_id_str].get('facebook_count', 0) + 1
+        data[user_id_str]['facebook_reset_time'] = current_time
     elif platform == 'youtube':
         data[user_id_str]['youtube_count'] = data[user_id_str].get('youtube_count', 0) + 1
+        data[user_id_str]['youtube_reset_time'] = current_time
     
     save_usage_data(data)
 
@@ -930,17 +944,26 @@ def reset_user_limit(message):
         # Reset usage data cho user
         data = load_usage_data()
         user_id_str = str(target_user_id)
+        current_time = time.time()
         
-        if user_id_str in data:
-            # Reset tất cả count về 0
-            data[user_id_str]['tiktok_count'] = 0
-            data[user_id_str]['facebook_count'] = 0
-            data[user_id_str]['youtube_count'] = 0
-            save_usage_data(data)
-            
-            bot.reply_to(message, f"✅ Đã reset limit cho user {target_user_id}!\n\n📊 TikTok: 0/4\n📘 Facebook: 0/2\n🎥 YouTube: 0/5")
-        else:
-            bot.reply_to(message, f"ℹ️ User {target_user_id} chưa có dữ liệu sử dụng nào.")
+        # Khởi tạo data nếu chưa có
+        if user_id_str not in data:
+            data[user_id_str] = {
+                'tiktok_count': 0, 'tiktok_reset_time': 0,
+                'facebook_count': 0, 'facebook_reset_time': 0,
+                'youtube_count': 0, 'youtube_reset_time': 0
+            }
+        
+        # Reset tất cả count và reset_time về 0 để user có thể dùng lại ngay
+        data[user_id_str]['tiktok_count'] = 0
+        data[user_id_str]['tiktok_reset_time'] = 0
+        data[user_id_str]['facebook_count'] = 0
+        data[user_id_str]['facebook_reset_time'] = 0
+        data[user_id_str]['youtube_count'] = 0
+        data[user_id_str]['youtube_reset_time'] = 0
+        save_usage_data(data)
+        
+        bot.reply_to(message, f"✅ Đã reset limit cho user {target_user_id}!\n\n📊 TikTok: 0/4\n📘 Facebook: 0/2\n🎥 YouTube: 0/5\n\n⏰ User có thể sử dụng lại ngay lập tức!")
             
     except ValueError:
         bot.reply_to(message, "❌ User_id phải là số nguyên!\n\nCú pháp: /resetlimit <user_id>")
