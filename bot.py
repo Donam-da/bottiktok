@@ -13,12 +13,11 @@ RAPIDAPI_KEY = "525e0b9934msha396ecf14d009c9p1dcadajsn39105b0e7627"
 
 
 # =======================================================
-# LÕI CÁC HÀM GỌI API (MỖI HÀM LÀ 1 MÁY CHỦ DỰ PHÒNG)
+# LÕI CÁC HÀM GỌI API (4 MÁY CHỦ XOAY TUA)
 # =======================================================
 
 def call_api_1_scrapper(tiktok_url):
     """Máy chủ 1: TikTok Scrapper (Yêu cầu trích xuất ID)"""
-    # Trích xuất ID từ link dài
     match = re.search(r"video/(\d+)", tiktok_url)
     video_id = match.group(1) if match else None
     if not video_id:
@@ -73,7 +72,7 @@ def call_api_2_social_media(tiktok_url):
 
 
 def call_api_3_tiktok_api23(tiktok_url):
-    """Máy chủ 3 (MỚI): Tiktok API (Đọc từ trường 'play' lớp ngoài cùng)"""
+    """Máy chủ 3: Tiktok API (Đọc từ trường 'play' lớp ngoài cùng)"""
     host = "tiktok-api23.p.rapidapi.com"
     url = f"https://{host}/api/download/video"
     querystring = {"url": tiktok_url}
@@ -85,7 +84,6 @@ def call_api_3_tiktok_api23(tiktok_url):
         response = requests.get(url, headers=headers, params=querystring, timeout=10)
         if response.status_code == 200:
             res_json = response.json()
-            # Bóc chuẩn theo ảnh image_5d39ca.png của bạn
             video_url = res_json.get('play') 
             if video_url:
                 print("[+] API 3 bóc link thành công!")
@@ -95,22 +93,51 @@ def call_api_3_tiktok_api23(tiktok_url):
     return None, None
 
 
+def call_api_4_no_watermark2(tiktok_url):
+    """Máy chủ 4 (MỚI): Tiktok Video No Watermark (Đọc từ data.hdplay hoặc data.play)"""
+    host = "tiktok-video-no-watermark2.p.rapidapi.com"
+    url = f"https://{host}/"
+    
+    # Cấu hình tham số hd=1 giống như trên playground bạn test thành công
+    querystring = {"url": tiktok_url, "hd": "1"}
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host
+    }
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            data_block = res_json.get('data', {})
+            
+            # Ưu tiên bản HD chất lượng cao không logo theo cấu trúc hệ thống
+            video_url = data_block.get('hdplay') or data_block.get('play')
+            caption = data_block.get('title') or "Video tải từ Máy chủ dự phòng 4 🔥"
+            
+            if video_url:
+                print("[+] API 4 bóc link không logo thành công!")
+                return video_url, caption
+    except Exception as e:
+        print(f"[-] API 4 gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "👋 Xin chào Nam! Hệ thống tải TikTok Đa Máy Chủ (3 Lõi Xoay Tua) đã sẵn sàng.\n\n"
-                          "👉 Chỉ cần gửi link video vào đây, Bot sẽ tự động tìm máy chủ chạy tốt nhất để tải!")
+    bot.reply_to(message, "👋 Xin chào Nam! Hệ thống tải TikTok Siêu Cấp Đa Máy Chủ (4 Lõi Xoay Tua) đã sẵn sàng.\n\n"
+                          "👉 Gửi link video vào đây, Bot tự động quét tìm máy chủ ngon nhất để bóc link không logo!")
 
 
 @bot.message_handler(func=lambda message: "tiktok.com" in message.text.lower() or message.text.startswith('http'))
 def handle_message(message):
     raw_url = message.text.strip()
-    status_msg = bot.reply_to(message, "⏳ Đang kết nối máy chủ phân tích dữ liệu...")
+    status_msg = bot.reply_to(message, "⏳ Đang kết nối mạng lưới máy chủ phân tích...")
 
-    # Giải mã nhanh nếu là link rút gọn trên điện thoại
+    # Giải mã nhanh nếu là link rút gọn trên điện thoại (vt.tiktok hoặc vm.tiktok)
     if "vt.tiktok.com" in raw_url or "vm.tiktok.com" in raw_url:
         try:
             response = requests.head(raw_url, allow_redirects=True, timeout=6)
@@ -118,36 +145,37 @@ def handle_message(message):
         except Exception:
             pass
 
-    # DANH SÁCH CÁC MÁY CHỦ SẼ ĐƯỢC DUYỆT QUA
+    # DANH SÁCH MẠNG LƯỚI 4 MÁY CHỦ THEO THỨ TỰ XOAY TUA
     api_servers = [
         {"name": "Máy chủ Chính (API 1)", "func": call_api_1_scrapper},
         {"name": "Máy chủ Dự phòng 2 (API 2)", "func": call_api_2_social_media},
-        {"name": "Máy chủ Dự phòng 3 (API 3)", "func": call_api_3_tiktok_api23}
+        {"name": "Máy chủ Dự phòng 3 (API 3)", "func": call_api_3_tiktok_api23},
+        {"name": "Máy chủ Không Logo (API 4)", "func": call_api_4_no_watermark2}
     ]
 
     video_link, caption = None, None
 
-    # Vòng lặp duyệt tự động qua từng máy chủ
+    # Vòng lặp duyệt tự động qua từng máy chủ gánh lỗi cho nhau
     for index, server in enumerate(api_servers):
         print(f"[*] Đang thử thách qua: {server['name']}...")
         
-        # Nếu đang ở server thứ 2 hoặc 3, cập nhật trạng thái trên Telegram cho người dùng biết
+        # Nếu máy chủ trước bận, cập nhật trạng thái ngay cho người dùng yên tâm
         if index > 0:
             try:
-                bot.edit_message_text(f"⚡ Máy chủ trước bận, đang chuyển tiếp sang {server['name']}...", 
+                bot.edit_message_text(f"⚡ Máy chủ trước bận/hết hạn, đang chuyển tiếp sang {server['name']}...", 
                                       chat_id=message.chat.id, message_id=status_msg.message_id)
             except Exception:
                 pass
 
-        # Gọi hàm API tương ứng
+        # Thực thi gọi hàm bóc tách link video
         video_link, caption = server["func"](raw_url)
 
-        # Nếu lấy được link thành công thì dừng vòng lặp (break) ngay lập tức
+        # Nếu lấy được link thành công, bẻ gãy vòng lặp để tiến hành gửi file ngay
         if video_link:
-            print(f"[+] Thành công tại {server['name']}. Tiến hành gửi file...")
+            print(f"[+] Thành công tại {server['name']}.")
             break
 
-    # GỬI FILE VIDEO VỀ CHO USER
+    # TIẾN HÀNH GỬI TRẢ FILE VIDEO SẠCH CHO USER
     if video_link:
         try:
             bot.edit_message_text("🚀 Đang gửi file video không logo về Telegram...", chat_id=message.chat.id, message_id=status_msg.message_id)
@@ -157,10 +185,10 @@ def handle_message(message):
         except Exception as e:
             bot.edit_message_text(f"❌ Lỗi khi tải video lên Telegram: {e}", chat_id=message.chat.id, message_id=status_msg.message_id)
     else:
-        bot.edit_message_text("💥 Toàn bộ hệ thống 3 máy chủ đều không bóc được link này hoặc đã hết quota tháng. Vui lòng thử lại sau!", 
+        bot.edit_message_text("💥 Toàn bộ hệ thống 4 máy chủ đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!", 
                               chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
 if __name__ == "__main__":
-    print("[*] Bot Telegram Tải TikTok 3 Máy Chủ Xoay Tua Đang Chạy...")
+    print("[*] Bot Telegram Tải TikTok 4 Máy Chủ Xoay Tua Đang Hoạt Động...")
     bot.infinity_polling()
