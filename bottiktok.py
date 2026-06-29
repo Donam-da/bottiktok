@@ -184,17 +184,91 @@ def get_notification_blocklist():
         print(f"[-] Lỗi khi đọc danh sách user bị block từ Gist: {e}")
         return []
 
+def get_notification_credentials_from_gist():
+    """Đọc notification_credentials từ Gist để kiểm tra pass riêng theo ID"""
+    if not GITHUB_TOKEN or not GIST_ID:
+        print("[-] Thiếu GITHUB_TOKEN hoặc GIST_ID trong biến môi trường")
+        return {"tele": {}, "hwid": {}}
+    
+    try:
+        headers = {'Authorization': f'token {GITHUB_TOKEN}'}
+        res = requests.get(f'https://api.github.com/gists/{GIST_ID}', headers=headers)
+        if res.status_code == 200:
+            gist_data = res.json()
+            files = gist_data.get('files', {})
+            if 'notification_credentials.json' in files:
+                content = files['notification_credentials.json']['content']
+                data = json.loads(content)
+                # Đảm bảo cấu trúc đúng
+                if 'tele' not in data:
+                    data['tele'] = {}
+                if 'hwid' not in data:
+                    data['hwid'] = {}
+                print(f"[+] Đã tải notification_credentials từ Gist: {len(data.get('tele', {}))} tele, {len(data.get('hwid', {}))} hwid")
+                return data
+        print(f"[-] Lỗi tải Gist: {res.status_code}")
+        return {"tele": {}, "hwid": {}}
+    except Exception as e:
+        print(f"[-] Lỗi khi đọc notification_credentials từ Gist: {e}")
+        return {"tele": {}, "hwid": {}}
+
+def check_telegram_password(user_id, password):
+    """Kiểm tra password riêng theo ID Telegram từ Gist"""
+    try:
+        credentials = get_notification_credentials_from_gist()
+        tele_cred = credentials.get('tele', {}).get(str(user_id))
+        
+        if tele_cred and tele_cred.get('password') == password:
+            # Kiểm tra hạn sử dụng nếu có
+            expires_at_str = tele_cred.get('expires_at')
+            if expires_at_str:
+                try:
+                    from datetime import datetime
+                    expires_at = datetime.fromisoformat(expires_at_str)
+                    if expires_at < datetime.now():
+                        return False, "❌ Mật khẩu của bạn đã hết hạn."
+                except ValueError:
+                    pass
+            return True, f"✅ Đăng nhập bằng ID Telegram {user_id} thành công!"
+        
+        return False, None
+    except Exception as e:
+        print(f"[-] Lỗi khi kiểm tra password từ Gist: {e}")
+        return False, None
+
 def is_user_authorized(user_id):
     """Kiểm tra xem user có quyền sử dụng bot TikTok không (đã có pass bot thông báo)"""
     # Admin luôn có quyền
     if user_id == ADMIN_ID:
         return True
     
-    # Đọc danh sách user có quyền từ bot thông báo
+    # Kiểm tra 1: User đã đăng nhập vào bot thông báo (trong allowed_users)
     allowed_users = get_notification_allowed_users()
-    is_auth = user_id in allowed_users
-    print(f"[DEBUG] is_user_authorized({user_id}): {is_auth}, allowed_users: {allowed_users}")
-    return is_auth
+    if user_id in allowed_users:
+        print(f"[DEBUG] is_user_authorized({user_id}): True (trong allowed_users)")
+        return True
+    
+    # Kiểm tra 2: User có pass riêng trong notification_credentials.json
+    credentials = get_notification_credentials_from_gist()
+    tele_cred = credentials.get('tele', {}).get(str(user_id))
+    
+    if tele_cred:
+        # Kiểm tra hạn sử dụng nếu có
+        expires_at_str = tele_cred.get('expires_at')
+        if expires_at_str:
+            try:
+                from datetime import datetime
+                expires_at = datetime.fromisoformat(expires_at_str)
+                if expires_at < datetime.now():
+                    print(f"[DEBUG] is_user_authorized({user_id}): False (pass hết hạn)")
+                    return False
+            except ValueError:
+                pass
+        print(f"[DEBUG] is_user_authorized({user_id}): True (có pass riêng trong credentials)")
+        return True
+    
+    print(f"[DEBUG] is_user_authorized({user_id}): False (không có quyền)")
+    return False
 
 def is_user_public(user_id):
     """Kiểm tra xem user có đang ở public mode không (user lạ tạm thời)"""
@@ -885,6 +959,32 @@ def send_welcome(message):
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
 
+
+@bot.message_handler(func=lambda message: not message.text.startswith('http') and not message.text.startswith('/'))
+def handle_password(message):
+    """Xử lý password riêng theo ID Telegram để đăng nhập"""
+    user_id = message.from_user.id
+    password = message.text.strip()
+    
+    # Nếu user đã có quyền, không cần xử lý password
+    if is_user_authorized(user_id):
+        return
+    
+    # Kiểm tra password từ Gist
+    success, result = check_telegram_password(user_id, password)
+    if success:
+        bot.reply_to(message, result, parse_mode="HTML")
+    else:
+        # Nếu password sai, hiển thị thông báo hướng dẫn
+        msg = (
+            "❌ Mật khẩu không đúng hoặc bạn chưa được cấp quyền.\n\n"
+            f"🆔 ID của bạn: <code>{user_id}</code>\n\n"
+            "💎 Mua pass bot 15k/10d\n"
+            "📞 Ib saler: @itisnotmyfault0\n\n"
+            "🖥️ Muốn sử dụng app tb trên máy mình\n"
+            "📞 Ib admin @hfnam04 (300k/nửa năm)"
+        )
+        bot.reply_to(message, msg, parse_mode="HTML")
 
 @bot.message_handler(func=lambda message: message.text.startswith('http'))
 def handle_message(message):
