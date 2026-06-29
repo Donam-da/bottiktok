@@ -3,15 +3,24 @@ import requests
 import telebot
 import threading
 import time
+import os
+from dotenv import load_dotenv
+
+# Load biến môi trường từ file .env
+load_dotenv()
 
 # =======================================================
 # CẤU HÌNH THÔNG TIN BOT VÀ TOKEN CHUNG
 # =======================================================
-BOT_TOKEN = "8937782880:AAE6Gsxh_SeCG5nkoEQHCHyfsnTWJ14SoiM"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN không được tìm thấy trong biến môi trường!")
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # Key tài khoản RapidAPI dùng chung của bạn
-RAPIDAPI_KEY = "525e0b9934msha396ecf14d009c9p1dcadajsn39105b0e7627"
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+if not RAPIDAPI_KEY:
+    raise ValueError("RAPIDAPI_KEY không được tìm thấy trong biến môi trường!")
 
 # Biến toàn cầu để kiểm soát progress bar
 progress_running = False
