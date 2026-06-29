@@ -278,7 +278,8 @@ def is_valid_tiktok_url(url):
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     bot.reply_to(message, "👋 Xin chào Nam! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
-                          "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!")
+                          "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+                          "📊 Limit: 5/day")
 
 
 @bot.message_handler(func=lambda message: message.text.startswith('http'))
