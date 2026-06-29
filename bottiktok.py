@@ -24,6 +24,13 @@ def health():
     return "OK", 200
 
 # =======================================================
+# CẤU HÌNH GITHUB ĐỂ ĐỌC DANH SÁCH USER CÓ QUYỀN
+# =======================================================
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GIST_ID = os.getenv("GIST_ID")
+TIKTOK_ALLOWED_FILE = "tiktok_allowed_users.json"
+
+# =======================================================
 # HỆ THỐNG GIỚI HẠN SỬ DỤNG
 # =======================================================
 ADMIN_ID = 6762189023
@@ -47,6 +54,40 @@ def save_usage_data(data):
             json.dump(data, f)
     except Exception as e:
         print(f"[-] Lỗi khi lưu dữ liệu sử dụng: {e}")
+
+def get_tiktok_allowed_users():
+    """Đọc danh sách user có quyền từ Gist"""
+    if not GITHUB_TOKEN or not GIST_ID:
+        print("[-] Thiếu GITHUB_TOKEN hoặc GIST_ID trong biến môi trường")
+        return []
+    
+    try:
+        headers = {'Authorization': f'token {GITHUB_TOKEN}'}
+        res = requests.get(f'https://api.github.com/gists/{GIST_ID}', headers=headers)
+        if res.status_code == 200:
+            gist_data = res.json()
+            files = gist_data.get('files', {})
+            if TIKTOK_ALLOWED_FILE in files:
+                content = files[TIKTOK_ALLOWED_FILE]['content']
+                data = json.loads(content)
+                allowed_users = data.get('allowed_users', [])
+                print(f"[+] Đã tải {len(allowed_users)} user có quyền từ Gist")
+                return allowed_users
+        print(f"[-] Lỗi tải Gist: {res.status_code}")
+        return []
+    except Exception as e:
+        print(f"[-] Lỗi khi đọc danh sách user có quyền từ Gist: {e}")
+        return []
+
+def is_user_authorized(user_id):
+    """Kiểm tra xem user có quyền sử dụng bot TikTok không"""
+    # Admin luôn có quyền
+    if user_id == ADMIN_ID:
+        return True
+    
+    # Đọc danh sách user có quyền từ Gist
+    allowed_users = get_tiktok_allowed_users()
+    return user_id in allowed_users
 
 def check_daily_limit(user_id):
     """Kiểm tra user đã vượt giới hạn ngày chưa"""
@@ -277,15 +318,37 @@ def is_valid_tiktok_url(url):
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
+    user_id = message.from_user.id
+    
+    # Kiểm tra quyền từ bot thông báo
+    if not is_user_authorized(user_id):
+        bot.reply_to(message, "🔒 <b>Bạn chưa có quyền sử dụng bot này!</b>\n\n"
+                              "Bot này chỉ dành cho user đã có quyền truy cập bot thông báo.\n"
+                              "Vui lòng liên hệ @itisnotmyfault0 để được cấp quyền.\n\n"
+                              "🔥 Sale 15k/10days - Giá rẻ nhất thị trường!\n"
+                              "✅ Key chính hãng, uy tín 100%\n"
+                              "⚡ Active nhanh chóng, hỗ trợ 24/7", parse_mode="HTML")
+        return
+    
     bot.reply_to(message, "👋 Xin chào Nam! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
                           "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
-                          "📊 Limit: 5/day")
+                          "📊 Limit: 5/video/ngày")
 
 
 @bot.message_handler(func=lambda message: message.text.startswith('http'))
 def handle_message(message):
     user_id = message.from_user.id
     raw_url = message.text.strip()
+    
+    # Kiểm tra quyền từ bot thông báo
+    if not is_user_authorized(user_id):
+        bot.reply_to(message, "🔒 <b>Bạn chưa có quyền sử dụng bot này!</b>\n\n"
+                              "Bot này chỉ dành cho user đã có quyền truy cập bot thông báo.\n"
+                              "Vui lòng liên hệ @itisnotmyfault0 để được cấp quyền.\n\n"
+                              "🔥 Sale 15k/10days - Giá rẻ nhất thị trường!\n"
+                              "✅ Key chính hãng, uy tín 100%\n"
+                              "⚡ Active nhanh chóng, hỗ trợ 24/7", parse_mode="HTML")
+        return
     
     # Kiểm tra giới hạn sử dụng hàng ngày
     can_use, current_count = check_daily_limit(user_id)
