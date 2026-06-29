@@ -1033,7 +1033,7 @@ def handle_message(message):
     if not can_use:
         # Xác định giới hạn dựa trên quyền của user và nền tảng
         if is_user_authorized(user_id):
-            daily_limit = 3 if platform == 'tiktok' else 2
+            daily_limit = 4 if platform == 'tiktok' else 2
         else:
             daily_limit = 1
         
