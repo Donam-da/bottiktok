@@ -1038,6 +1038,16 @@ if __name__ == "__main__":
     # Kiểm tra xem có URL Render không để quyết định dùng webhook hay polling
     render_url = os.environ.get('RENDER_EXTERNAL_URL')
     
+    # Nếu không có RENDER_EXTERNAL_URL, kiểm tra PORT để xác định có phải Render không
+    if not render_url and port != 5000:
+        # Render thường dùng port khác 5000 (ví dụ 10000)
+        # Lấy URL từ biến môi trường RENDER_SERVICE_URL hoặc build từ service name
+        render_url = os.environ.get('RENDER_SERVICE_URL')
+        if not render_url:
+            # Fallback: build URL từ service name nếu có
+            service_name = os.environ.get('RENDER_SERVICE_NAME', 'bottiktok')
+            render_url = f"https://{service_name}.onrender.com"
+    
     if render_url:
         # Chạy trên Render - sử dụng webhook
         webhook_url = f"{render_url}/webhook"
@@ -1045,7 +1055,10 @@ if __name__ == "__main__":
         print(f"[*] Setting webhook: {webhook_url}")
         
         # Xóa webhook cũ nếu có
-        bot.remove_webhook()
+        try:
+            bot.remove_webhook()
+        except Exception:
+            pass
         
         # Set webhook mới
         bot.set_webhook(url=webhook_url)
