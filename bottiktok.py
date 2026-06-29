@@ -835,6 +835,13 @@ def is_valid_youtube_url(url):
 def send_welcome(message):
     user_id = message.from_user.id
     
+    # Admin - không giới hạn
+    if user_id == ADMIN_ID:
+        bot.reply_to(message, "👋 Xin chào Admin! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+                              "🔥 ADMIN MODE - Không giới hạn sử dụng")
+        return
+    
     # Kiểm tra xem user có bị block từ bot thông báo không
     if is_user_blocked(user_id):
         bot.reply_to(message, "🚫 Bạn đã bị chặn bởi Admin.\n\n"
