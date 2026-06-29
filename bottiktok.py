@@ -578,6 +578,42 @@ def call_yt_api_datafanatic_details(yt_url):
     return None, None
 
 
+def call_yt_api_fast_downloader_v2(yt_url):
+    """YT Máy chủ 2: YouTube Video FAST Downloader 24/7 (Cấu trúc chuẩn theo ảnh)"""
+    # 1. Sử dụng hàm extract_youtube_id có sẵn để lấy ID
+    video_id = extract_youtube_id(yt_url)
+    if not video_id:
+        return None, None
+        
+    host = "youtube-video-fast-downloader-24-7.p.rapidapi.com"
+    
+    # Ép cấu trúc đường dẫn chứa videoId ở cuối giống hệt trong cURL Code Snippet của bạn
+    url = f"https://{host}/download_video/{video_id}"
+    
+    # Để quality mặc định là 247 hoặc bạn có thể đổi theo tài liệu test của API
+    querystring = {"quality": "247"}
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            
+            # Phân tách kết quả trả về từ API
+            video_url = res_json.get('url') or res_json.get('download_url') or res_json.get('video_url')
+            caption = res_json.get('title') or "Video tải từ YouTube FAST Server ⚡"
+            
+            if video_url:
+                print("[+] YT API 2 (FAST Downloader) bóc link thành công!")
+                return video_url, caption
+    except Exception as e:
+        print(f"[-] YT API 2 gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
@@ -750,9 +786,10 @@ def handle_message(message):
             {"name": "Facebook Server 5 (Media API)", "func": call_fb_api_media_download_url}
         ]
     else:
-        # 1 máy chủ YouTube (sẽ thêm nhiều hơn sau)
+        # 2 máy chủ YouTube xoay tua
         api_servers = [
-            {"name": "YouTube Server (DataFanatic)", "func": call_yt_api_datafanatic_details}
+            {"name": "YouTube Server (DataFanatic)", "func": call_yt_api_datafanatic_details},
+            {"name": "YouTube FAST Server (24/7)", "func": call_yt_api_fast_downloader_v2}
         ]
 
     video_link, caption = None, None
@@ -790,7 +827,7 @@ def handle_message(message):
         elif is_facebook:
             error_msg = "💥 Toàn bộ hệ thống 5 máy chủ Facebook đều không phản hồi link này. Hãy thử lại sau!"
         else:
-            error_msg = "💥 Hệ thống YouTube không phản hồi link này. Hãy thử lại sau!"
+            error_msg = "💥 Toàn bộ hệ thống 2 máy chủ YouTube đều không phản hồi link này. Hãy thử lại sau!"
         bot.edit_message_text(error_msg, chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
