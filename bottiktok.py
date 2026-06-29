@@ -382,7 +382,8 @@ def send_welcome(message):
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
-                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên 5 video/ngày\n"
+                              "� Bạn chỉ đến user bot TikTok của tôi để thử 1 lần tải video trên ngày\n\n"
+                              "�💎 Mua pass bot 15k/10d để nâng giới hạn lên 5 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
