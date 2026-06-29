@@ -1,1 +1,1 @@
-worker: python bottiktok.py
+web: python bottiktok.py

@@ -5,9 +5,21 @@ import threading
 import time
 import os
 from dotenv import load_dotenv
+from flask import Flask
 
 # Load biến môi trường từ file .env
 load_dotenv()
+
+# Tạo Flask app cho health check
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "TikTok Telegram Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK", 200
 
 # =======================================================
 # CẤU HÌNH THÔNG TIN BOT VÀ TOKEN CHUNG
@@ -282,4 +294,15 @@ def handle_message(message):
 
 if __name__ == "__main__":
     print("[*] Bot Telegram Tải TikTok 5 Máy Chủ Xoay Tua Đang Hoạt Động...")
+    
+    # Chạy Flask server trong thread riêng biệt
+    port = int(os.environ.get('PORT', 5000))
+    flask_thread = threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': port})
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    print(f"[*] Flask server đang chạy trên port {port}")
+    print(f"[*] Health check: http://0.0.0.0:{port}/health")
+    
+    # Chạy Telegram bot
     bot.infinity_polling()
