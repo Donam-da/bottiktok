@@ -1,6 +1,8 @@
 import re
 import requests
 import telebot
+import threading
+import time
 
 # =======================================================
 # CẤU HÌNH THÔNG TIN BOT VÀ TOKEN CHUNG
@@ -10,6 +12,22 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 # Key tài khoản RapidAPI dùng chung của bạn
 RAPIDAPI_KEY = "525e0b9934msha396ecf14d009c9p1dcadajsn39105b0e7627"
+
+# Biến toàn cầu để kiểm soát progress bar
+progress_running = False
+
+
+def progress_bar(chat_id, message_id):
+    """Chạy progress bar từ 0% đến 100% từng số một"""
+    global progress_running
+    for i in range(101):
+        if not progress_running:
+            break
+        try:
+            bot.edit_message_text(f"Process: {i}%", chat_id=chat_id, message_id=message_id)
+            time.sleep(0.05)  # Delay nhỏ để tạo hiệu ứng mượt
+        except Exception:
+            break
 
 
 # =======================================================
@@ -122,6 +140,35 @@ def call_api_4_no_watermark2(tiktok_url):
     return None, None
 
 
+def call_api_5_7scorp(tiktok_url):
+    """Máy chủ 5: TikTok Downloader by 7scorp (Gói Free 400 req/tháng)"""
+    host = "tiktok-downloader-download-tiktok-videos-without-watermark.p.rapidapi.com"
+    
+    # Endpoint số 2 chính xác của bạn
+    url = f"https://{host}/vid/index" 
+    
+    querystring = {"url": tiktok_url}
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host
+    }
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            
+            # Bóc tách chuẩn theo Response body trên ảnh của bạn
+            video_url = res_json.get('video')
+            caption = res_json.get('title') or "Video tải từ Máy chủ dự phòng 5 ✨"
+            
+            if video_url:
+                print("[+] API 5 (7scorp) bóc link thành công!")
+                return video_url, caption
+    except Exception as e:
+        print(f"[-] API 5 gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
@@ -165,7 +212,13 @@ def handle_message(message):
         bot.reply_to(message, error_message)
         return
     
-    status_msg = bot.reply_to(message, "⏳ Đang kết nối mạng lưới máy chủ phân tích...")
+    status_msg = bot.reply_to(message, "Process: 0%")
+    
+    # Bắt đầu chạy progress bar trong thread riêng biệt
+    global progress_running
+    progress_running = True
+    progress_thread = threading.Thread(target=progress_bar, args=(message.chat.id, status_msg.message_id))
+    progress_thread.start()
 
     # Giải mã nhanh nếu là link rút gọn trên điện thoại (vt.tiktok hoặc vm.tiktok)
     if "vt.tiktok.com" in raw_url or "vm.tiktok.com" in raw_url:
@@ -175,12 +228,13 @@ def handle_message(message):
         except Exception:
             pass
 
-    # DANH SÁCH MẠNG LƯỚI 4 MÁY CHỦ THEO THỨ TỰ XOAY TUA
+    # DANH SÁCH MẠNG LƯỚI 5 MÁY CHỦ THEO THỨ TỰ XOAY TUA
     api_servers = [
         {"name": "Máy chủ Chính (API 1)", "func": call_api_1_scrapper},
         {"name": "Máy chủ Dự phòng 2 (API 2)", "func": call_api_2_social_media},
         {"name": "Máy chủ Dự phòng 3 (API 3)", "func": call_api_3_tiktok_api23},
-        {"name": "Máy chủ Không Logo (API 4)", "func": call_api_4_no_watermark2}
+        {"name": "Máy chủ Không Logo (API 4)", "func": call_api_4_no_watermark2},
+        {"name": "Máy chủ 7scorp (API 5)", "func": call_api_5_7scorp}
     ]
 
     video_link, caption = None, None
@@ -188,37 +242,35 @@ def handle_message(message):
     # Vòng lặp duyệt tự động qua từng máy chủ gánh lỗi cho nhau
     for index, server in enumerate(api_servers):
         print(f"[*] Đang thử thách qua: {server['name']}...")
-        
-        # Nếu máy chủ trước bận, cập nhật trạng thái ngay cho người dùng yên tâm
-        if index > 0:
-            try:
-                bot.edit_message_text(f"⚡ Máy chủ trước bận/hết hạn, đang chuyển tiếp sang {server['name']}...", 
-                                      chat_id=message.chat.id, message_id=status_msg.message_id)
-            except Exception:
-                pass
 
         # Thực thi gọi hàm bóc tách link video
         video_link, caption = server["func"](raw_url)
 
-        # Nếu lấy được link thành công, bẻ gãy vòng lặp để tiến hành gửi file ngay
+        # Nếu lấy được link thành công, dừng ngay và không thử API khác
         if video_link:
             print(f"[+] Thành công tại {server['name']}.")
             break
+        
+        # Nếu API này fail, tiếp tục thử API tiếp theo
+        print(f"[-] {server['name']} thất bại, chuyển sang máy chủ tiếp theo...")
 
     # TIẾN HÀNH GỬI TRẢ FILE VIDEO SẠCH CHO USER
+    # Dừng progress bar
+    progress_running = False
+    
     if video_link:
         try:
-            bot.edit_message_text("🚀 Đang gửi file video không logo về Telegram...", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text("Process: 100%", chat_id=message.chat.id, message_id=status_msg.message_id)
             bot.send_video(chat_id=message.chat.id, video=video_link, caption=caption if caption else "🎬")
             bot.delete_message(message.chat.id, status_msg.message_id)
             print("[+] Đã gửi thành công video!")
         except Exception as e:
             bot.edit_message_text(f"❌ Lỗi khi tải video lên Telegram: {e}", chat_id=message.chat.id, message_id=status_msg.message_id)
     else:
-        bot.edit_message_text("💥 Toàn bộ hệ thống 4 máy chủ đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!", 
+        bot.edit_message_text("💥 Toàn bộ hệ thống 5 máy chủ đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!", 
                               chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
 if __name__ == "__main__":
-    print("[*] Bot Telegram Tải TikTok 4 Máy Chủ Xoay Tua Đang Hoạt Động...")
+    print("[*] Bot Telegram Tải TikTok 5 Máy Chủ Xoay Tua Đang Hoạt Động...")
     bot.infinity_polling()
