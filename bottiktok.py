@@ -28,7 +28,11 @@ def webhook():
     """Endpoint để nhận webhook từ Telegram"""
     if request.method == 'POST':
         json_str = request.get_data().decode('UTF-8')
+        print(f"[WEBHOOK] Nhận request: {json_str[:200]}...")  # Log request
         update = telebot.types.Update.de_json(json_str)
+        if update.message:
+            user_id = update.message.from_user.id
+            print(f"[WEBHOOK] User ID: {user_id}, Text: {update.message.text[:50] if update.message.text else 'N/A'}")
         bot.process_new_updates([update])
         return "OK", 200
     return "OK", 200
@@ -185,31 +189,23 @@ def get_notification_blocklist():
         return []
 
 def get_notification_credentials_from_gist():
-    """Đọc notification_credentials từ Gist để kiểm tra pass riêng theo ID"""
-    if not GITHUB_TOKEN or not GIST_ID:
-        print("[-] Thiếu GITHUB_TOKEN hoặc GIST_ID trong biến môi trường")
-        return {"tele": {}, "hwid": {}}
-    
+    """Đọc notification_credentials từ Gist raw URL để kiểm tra pass riêng theo ID"""
     try:
-        headers = {'Authorization': f'token {GITHUB_TOKEN}'}
-        res = requests.get(f'https://api.github.com/gists/{GIST_ID}', headers=headers)
+        raw_url = "https://gist.githubusercontent.com/Donam-da/fd70db5caf7e01c60a75a694232421c4/raw/0d931935325b70b166ab945109c7f27f33225ba9/notification_credentials.json"
+        res = requests.get(raw_url)
         if res.status_code == 200:
-            gist_data = res.json()
-            files = gist_data.get('files', {})
-            if 'notification_credentials.json' in files:
-                content = files['notification_credentials.json']['content']
-                data = json.loads(content)
-                # Đảm bảo cấu trúc đúng
-                if 'tele' not in data:
-                    data['tele'] = {}
-                if 'hwid' not in data:
-                    data['hwid'] = {}
-                print(f"[+] Đã tải notification_credentials từ Gist: {len(data.get('tele', {}))} tele, {len(data.get('hwid', {}))} hwid")
-                return data
-        print(f"[-] Lỗi tải Gist: {res.status_code}")
+            data = json.loads(res.text)
+            # Đảm bảo cấu trúc đúng
+            if 'tele' not in data:
+                data['tele'] = {}
+            if 'hwid' not in data:
+                data['hwid'] = {}
+            print(f"[+] Đã tải notification_credentials từ Gist raw: {len(data.get('tele', {}))} tele, {len(data.get('hwid', {}))} hwid")
+            return data
+        print(f"[-] Lỗi tải Gist raw: {res.status_code}")
         return {"tele": {}, "hwid": {}}
     except Exception as e:
-        print(f"[-] Lỗi khi đọc notification_credentials từ Gist: {e}")
+        print(f"[-] Lỗi khi đọc notification_credentials từ Gist raw: {e}")
         return {"tele": {}, "hwid": {}}
 
 def check_telegram_password(user_id, password):
@@ -237,18 +233,12 @@ def check_telegram_password(user_id, password):
         return False, None
 
 def is_user_authorized(user_id):
-    """Kiểm tra xem user có quyền sử dụng bot TikTok không (đã có pass bot thông báo)"""
+    """Kiểm tra xem user có quyền sử dụng bot TikTok không (chỉ check từ notification_credentials.json trong Gist)"""
     # Admin luôn có quyền
     if user_id == ADMIN_ID:
         return True
     
-    # Kiểm tra 1: User đã đăng nhập vào bot thông báo (trong allowed_users)
-    allowed_users = get_notification_allowed_users()
-    if user_id in allowed_users:
-        print(f"[DEBUG] is_user_authorized({user_id}): True (trong allowed_users)")
-        return True
-    
-    # Kiểm tra 2: User có pass riêng trong notification_credentials.json
+    # Chỉ kiểm tra user có pass riêng trong notification_credentials.json
     credentials = get_notification_credentials_from_gist()
     tele_cred = credentials.get('tele', {}).get(str(user_id))
     
@@ -306,19 +296,26 @@ def check_daily_limit(user_id, platform='tiktok'):
     
     # Xác định giới hạn dựa trên quyền của user và nền tảng
     if is_user_authorized(user_id):
-        # User đã có pass bot thông báo
+        # User đã có pass trong notification_credentials.json (đọc từ Gist)
         if platform == 'tiktok':
-            daily_limit = 3  # TikTok: 3 video/ngày
+            daily_limit = 4  # TikTok: 4 video/ngày
         elif platform == 'facebook':
             daily_limit = 2  # Facebook: 2 video/ngày
+        elif platform == 'youtube':
+            daily_limit = 5  # YouTube: 5 video/ngày
         else:
-            daily_limit = 3  # Mặc định
+            daily_limit = 4  # Mặc định
     elif is_user_public(user_id):
         # User public mode (user lạ tạm thời)
-        daily_limit = 1  # Cả TikTok và Facebook: 1 video/ngày
+        daily_limit = 1  # Cả TikTok, Facebook, YouTube: 1 video/ngày
     else:
-        # User hoàn toàn lạ (không có pass, không public)
-        daily_limit = 1  # Cả TikTok và Facebook: 1 video/ngày
+        # User hoàn toàn lạ (không có trong Gist)
+        if platform == 'tiktok':
+            daily_limit = 1  # TikTok: 1 video/ngày
+        elif platform == 'youtube':
+            daily_limit = 1  # YouTube: 1 video/ngày
+        else:
+            daily_limit = 1  # Mặc định
     
     user_id_str = str(user_id)
     today = str(date.today())
@@ -327,7 +324,7 @@ def check_daily_limit(user_id, platform='tiktok'):
     
     # Reset count nếu ngày mới
     if user_id_str not in data or data[user_id_str].get('date') != today:
-        data[user_id_str] = {'date': today, 'tiktok_count': 0, 'facebook_count': 0}
+        data[user_id_str] = {'date': today, 'tiktok_count': 0, 'facebook_count': 0, 'youtube_count': 0}
         save_usage_data(data)
     
     # Lấy count theo nền tảng
@@ -335,6 +332,8 @@ def check_daily_limit(user_id, platform='tiktok'):
         count = data[user_id_str].get('tiktok_count', 0)
     elif platform == 'facebook':
         count = data[user_id_str].get('facebook_count', 0)
+    elif platform == 'youtube':
+        count = data[user_id_str].get('youtube_count', 0)
     else:
         count = data[user_id_str].get('tiktok_count', 0) + data[user_id_str].get('facebook_count', 0)
     
@@ -354,13 +353,15 @@ def increment_usage(user_id, platform='tiktok'):
     data = load_usage_data()
     
     if user_id_str not in data or data[user_id_str].get('date') != today:
-        data[user_id_str] = {'date': today, 'tiktok_count': 0, 'facebook_count': 0}
+        data[user_id_str] = {'date': today, 'tiktok_count': 0, 'facebook_count': 0, 'youtube_count': 0}
     
     # Tăng count theo nền tảng
     if platform == 'tiktok':
         data[user_id_str]['tiktok_count'] = data[user_id_str].get('tiktok_count', 0) + 1
     elif platform == 'facebook':
         data[user_id_str]['facebook_count'] = data[user_id_str].get('facebook_count', 0) + 1
+    elif platform == 'youtube':
+        data[user_id_str]['youtube_count'] = data[user_id_str].get('youtube_count', 0) + 1
     
     save_usage_data(data)
 
@@ -933,11 +934,11 @@ def send_welcome(message):
     
     # Kiểm tra quyền từ bot thông báo
     if is_user_authorized(user_id):
-        # User đã có pass bot thông báo
+        # User đã có pass bot thông báo (đọc từ Gist)
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit:\n"
-                              "• TikTok: 3 video/ngày\n"
+                              "• TikTok: 4 video/ngày\n"
                               "• Facebook: 2 video/ngày\n\n"
                               "✅ Bạn đã có pass bot thông báo!")
     elif is_user_public(user_id):
@@ -945,7 +946,7 @@ def send_welcome(message):
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử - Public Mode)\n\n"
-                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 3, Facebook 2 video/ngày\n"
+                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 4, Facebook 2 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
@@ -954,7 +955,7 @@ def send_welcome(message):
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
-                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 3, Facebook 2 video/ngày\n"
+                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 4, Facebook 2 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
@@ -1167,6 +1168,10 @@ if __name__ == "__main__":
     else:
         # Chạy local - sử dụng polling
         print(f"[*] Chạy local với polling")
+        
+        # Xóa webhook để dùng polling
+        bot.delete_webhook()
+        print("[*] Đã xóa webhook để chạy polling")
         
         # Chạy Flask server trong thread riêng biệt
         flask_thread = threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': port})
