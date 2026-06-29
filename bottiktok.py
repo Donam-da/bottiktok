@@ -98,17 +98,27 @@ def get_notification_allowed_users():
         if res.status_code == 200:
             gist_data = res.json()
             files = gist_data.get('files', {})
+            print(f"[DEBUG] Files trong Gist: {list(files.keys())}")
+            
             if 'notification_allowed_users.json' in files:
                 content = files['notification_allowed_users.json']['content']
+                print(f"[DEBUG] Content notification_allowed_users.json: {content[:200]}...")
                 data = json.loads(content)
                 # notification_allowed_users.json là mảng trực tiếp
                 if isinstance(data, list):
-                    print(f"[+] Đã tải {len(data)} user có quyền từ bot thông báo")
+                    print(f"[+] Đã tải {len(data)} user có quyền từ bot thông báo: {data}")
                     return data
-        print(f"[-] Lỗi tải notification_allowed_users: {res.status_code}")
+                else:
+                    print(f"[-] notification_allowed_users.json không phải list, type: {type(data)}, data: {data}")
+            else:
+                print(f"[-] Không tìm thấy file notification_allowed_users.json trong Gist")
+        else:
+            print(f"[-] Lỗi tải Gist: {res.status_code}")
         return []
     except Exception as e:
         print(f"[-] Lỗi khi đọc danh sách user có quyền từ bot thông báo: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def get_notification_public_users():
@@ -182,7 +192,9 @@ def is_user_authorized(user_id):
     
     # Đọc danh sách user có quyền từ bot thông báo
     allowed_users = get_notification_allowed_users()
-    return user_id in allowed_users
+    is_auth = user_id in allowed_users
+    print(f"[DEBUG] is_user_authorized({user_id}): {is_auth}, allowed_users: {allowed_users}")
+    return is_auth
 
 def is_user_public(user_id):
     """Kiểm tra xem user có đang ở public mode không (user lạ tạm thời)"""
@@ -835,13 +847,6 @@ def is_valid_youtube_url(url):
 def send_welcome(message):
     user_id = message.from_user.id
     
-    # Admin - không giới hạn
-    if user_id == ADMIN_ID:
-        bot.reply_to(message, "👋 Xin chào Admin! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
-                              "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
-                              "🔥 ADMIN MODE - Không giới hạn sử dụng")
-        return
-    
     # Kiểm tra xem user có bị block từ bot thông báo không
     if is_user_blocked(user_id):
         bot.reply_to(message, "🚫 Bạn đã bị chặn bởi Admin.\n\n"
@@ -1040,14 +1045,36 @@ def handle_message(message):
 if __name__ == "__main__":
     print("[*] Bot Telegram Tải TikTok 5 Máy Chủ Xoay Tua Đang Hoạt Động...")
     
-    # Chạy Flask server trong thread riêng biệt cho health check
     port = int(os.environ.get('PORT', 5000))
-    flask_thread = threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': port})
-    flask_thread.daemon = True
-    flask_thread.start()
     
-    print(f"[*] Flask server đang chạy trên port {port}")
-    print(f"[*] Health check: http://0.0.0.0:{port}/health")
+    # Kiểm tra xem có URL Render không để quyết định dùng webhook hay polling
+    render_url = os.environ.get('RENDER_EXTERNAL_URL')
     
-    # Chạy Telegram bot với polling
-    bot.infinity_polling()
+    if render_url:
+        # Chạy trên Render - sử dụng webhook
+        webhook_url = f"{render_url}/webhook"
+        print(f"[*] Đang chạy trên Render: {render_url}")
+        print(f"[*] Setting webhook: {webhook_url}")
+        
+        # Xóa webhook cũ nếu có
+        bot.remove_webhook()
+        
+        # Set webhook mới
+        bot.set_webhook(url=webhook_url)
+        
+        # Chạy Flask app (webhook sẽ tự xử lý)
+        app.run(host='0.0.0.0', port=port)
+    else:
+        # Chạy local - sử dụng polling
+        print(f"[*] Chạy local với polling")
+        
+        # Chạy Flask server trong thread riêng biệt
+        flask_thread = threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': port})
+        flask_thread.daemon = True
+        flask_thread.start()
+        
+        print(f"[*] Flask server đang chạy trên port {port}")
+        print(f"[*] Health check: http://0.0.0.0:{port}/health")
+        
+        # Chạy Telegram bot với polling
+        bot.infinity_polling()
