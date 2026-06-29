@@ -29,6 +29,7 @@ def health():
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GIST_ID = os.getenv("GIST_ID")
 TIKTOK_ALLOWED_FILE = "tiktok_allowed_users.json"
+NOTIFICATION_BLOCKLIST_FILE = "notification_blocklist.json"
 
 # =======================================================
 # HỆ THỐNG GIỚI HẠN SỬ DỤNG
@@ -79,6 +80,30 @@ def get_tiktok_allowed_users():
         print(f"[-] Lỗi khi đọc danh sách user có quyền từ Gist: {e}")
         return []
 
+def get_notification_blocklist():
+    """Đọc danh sách user bị block từ Gist"""
+    if not GITHUB_TOKEN or not GIST_ID:
+        print("[-] Thiếu GITHUB_TOKEN hoặc GIST_ID trong biến môi trường")
+        return []
+    
+    try:
+        headers = {'Authorization': f'token {GITHUB_TOKEN}'}
+        res = requests.get(f'https://api.github.com/gists/{GIST_ID}', headers=headers)
+        if res.status_code == 200:
+            gist_data = res.json()
+            files = gist_data.get('files', {})
+            if NOTIFICATION_BLOCKLIST_FILE in files:
+                content = files[NOTIFICATION_BLOCKLIST_FILE]['content']
+                data = json.loads(content)
+                blocklist = data.get('blocklist', [])
+                print(f"[+] Đã tải {len(blocklist)} user bị block từ Gist")
+                return blocklist
+        print(f"[-] Lỗi tải Gist: {res.status_code}")
+        return []
+    except Exception as e:
+        print(f"[-] Lỗi khi đọc danh sách user bị block từ Gist: {e}")
+        return []
+
 def is_user_authorized(user_id):
     """Kiểm tra xem user có quyền sử dụng bot TikTok không"""
     # Admin luôn có quyền
@@ -88,6 +113,16 @@ def is_user_authorized(user_id):
     # Đọc danh sách user có quyền từ Gist
     allowed_users = get_tiktok_allowed_users()
     return user_id in allowed_users
+
+def is_user_blocked(user_id):
+    """Kiểm tra xem user có bị block từ bot thông báo không"""
+    # Admin không bao giờ bị block
+    if user_id == ADMIN_ID:
+        return False
+    
+    # Đọc danh sách user bị block từ Gist
+    blocklist = get_notification_blocklist()
+    return user_id in blocklist
 
 def check_daily_limit(user_id):
     """Kiểm tra user đã vượt giới hạn ngày chưa"""
@@ -326,27 +361,47 @@ def is_valid_tiktok_url(url):
 def send_welcome(message):
     user_id = message.from_user.id
     
+    # Kiểm tra xem user có bị block từ bot thông báo không
+    if is_user_blocked(user_id):
+        bot.reply_to(message, "🚫 Bạn đã bị chặn bởi Admin.\n\n"
+                              "💬 Ib @itisnotmyfault0 để mở khóa\n\n"
+                              "💎 Mua pass bot 15k/10d\n"
+                              "📞 Ib saler: @itisnotmyfault0\n\n"
+                              "🖥️ Muốn sử dụng app tb trên máy mình\n"
+                              "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
+        return
+    
     # Kiểm tra quyền từ bot thông báo
     if is_user_authorized(user_id):
         # User có quyền: giới hạn 5 video/ngày
-        bot.reply_to(message, "� Xin chào! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 5 video/ngày")
     else:
         # User không có quyền: giới hạn 1 video/ngày
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
-                              "� Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+                              "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
                               "💎 Mua pass bot 15k/10d để nâng giới hạn lên 5 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
-                              "� Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
+                              "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
 
 
 @bot.message_handler(func=lambda message: message.text.startswith('http'))
 def handle_message(message):
     user_id = message.from_user.id
     raw_url = message.text.strip()
+    
+    # Kiểm tra xem user có bị block từ bot thông báo không
+    if is_user_blocked(user_id):
+        bot.reply_to(message, "🚫 Bạn đã bị chặn bởi Admin.\n\n"
+                              "💬 Ib @itisnotmyfault0 để mở khóa\n\n"
+                              "💎 Mua pass bot 15k/10d\n"
+                              "📞 Ib saler: @itisnotmyfault0\n\n"
+                              "🖥️ Muốn sử dụng app tb trên máy mình\n"
+                              "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
+        return
     
     # Không chặn user không có quyền - cho phép dùng thử với giới hạn 1 video/ngày
     
