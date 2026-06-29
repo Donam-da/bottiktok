@@ -505,6 +505,79 @@ def call_fb_api_media_download_url(fb_url):
     return None, None
 
 
+def extract_youtube_id(url):
+    """Hàm phụ tách lấy ID video từ link YouTube hoặc Shorts bất kỳ"""
+    pattern = r"(?:v=|\/shorts\/|\/embed\/|\/v\/|youtu\.be\/|\/watch\?v=)([^#\&\?]*)"
+    match = re.search(pattern, url)
+    return match.group(1) if match else None
+
+
+def call_yt_api_datafanatic_details(yt_url):
+    """YT Máy chủ 1: YouTube Media Downloader by DataFanatic (100 req/tháng)"""
+    # 1. Tách lấy ID video từ URL người dùng nhập
+    video_id = extract_youtube_id(yt_url)
+    if not video_id:
+        print("[-] Không tìm thấy ID video YouTube hợp lệ.")
+        return None, None
+        
+    host = "youtube-media-downloader.p.rapidapi.com"
+    url = f"https://{host}/v2/video/details"
+    
+    # Cấu hình các tham số chuẩn theo đúng giao diện web bạn đã test
+    querystring = {
+        "videoId": video_id,
+        "urlAccess": "normal",
+        "videos": "auto",
+        "audios": "auto"
+    }
+    
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            
+            # Tiêu đề video làm Caption
+            caption = res_json.get('title') or "Video tải từ YouTube Server 1 🎥"
+            
+            # Đi sâu vào cấu trúc JSON để tìm link video .mp4
+            videos_block = res_json.get('videos', {})
+            items = videos_block.get('items', [])
+            
+            video_url = None
+            
+            # VÒNG QUÉT 1: Tìm bản Full HD (1080p) hoặc HD (720p) đã được gộp sẵn tiếng (hasAudio=True)
+            for item in items:
+                quality = str(item.get('quality', ''))
+                if ('1080p' in quality or '720p' in quality) and item.get('hasAudio') == True:
+                    video_url = item.get('url')
+                    print(f"[+] Tìm thấy bản video gộp sẵn tiếng chất lượng: {quality}")
+                    break
+            
+            # VÒNG QUÉT 2: Nếu không thấy bản HD/Full HD gộp sẵn tiếng, lấy đại link video đầu tiên trong danh sách có tiếng
+            if not video_url:
+                for item in items:
+                    if item.get('hasAudio') == True:
+                        video_url = item.get('url')
+                        break
+            
+            # VÒNG QUÉT 3: Phương án cuối cùng, lấy link bất kỳ có sẵn
+            if not video_url and items:
+                video_url = items[0].get('url')
+                
+            if video_url:
+                print("[+] YT API 1 (DataFanatic Details) bóc link thành công!")
+                return video_url, caption
+                
+    except Exception as e:
+        print(f"[-] YT API 1 gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
@@ -536,6 +609,21 @@ def is_valid_facebook_url(url):
     return False
 
 
+def is_valid_youtube_url(url):
+    """Kiểm tra xem link có phải là YouTube hợp lệ không"""
+    yt_patterns = [
+        r'https?://(www\.)?youtube\.com/watch\?v=.*',
+        r'https?://(www\.)?youtube\.com/shorts/.*',
+        r'https?://(www\.)?youtube\.com/embed/.*',
+        r'https?://(www\.)?youtu\.be/.*',
+        r'https?://(www\.)?youtube\.com/v/.*'
+    ]
+    for pattern in yt_patterns:
+        if re.match(pattern, url, re.IGNORECASE):
+            return True
+    return False
+
+
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     user_id = message.from_user.id
@@ -553,13 +641,13 @@ def send_welcome(message):
     # Kiểm tra quyền từ bot thông báo
     if is_user_authorized(user_id):
         # User có quyền: giới hạn 5 video/ngày
-        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
-                              "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 5 video/ngày")
     else:
         # User không có quyền: giới hạn 1 video/ngày
-        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
-                              "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
                               "💎 Mua pass bot 15k/10d để nâng giới hạn lên 5 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
@@ -597,13 +685,14 @@ def handle_message(message):
         bot.reply_to(message, limit_message)
         return
     
-    # Kiểm tra link có phải TikTok hay Facebook hợp lệ không
+    # Kiểm tra link có phải TikTok, Facebook hay YouTube hợp lệ không
     is_tiktok = is_valid_tiktok_url(raw_url)
     is_facebook = is_valid_facebook_url(raw_url)
+    is_youtube = is_valid_youtube_url(raw_url)
     
-    if not is_tiktok and not is_facebook:
+    if not is_tiktok and not is_facebook and not is_youtube:
         error_message = (
-            "❌ Link không hợp lệ! Vui lòng nhập lại link TikTok hoặc Facebook đúng.\n\n"
+            "❌ Link không hợp lệ! Vui lòng nhập lại link TikTok, Facebook hoặc YouTube đúng.\n\n"
             "📱 **Mẫu link TikTok trên điện thoại:**\n"
             "• https://vm.tiktok.com/ZM6abc123/\n"
             "• https://vt.tiktok.com/ZM6abc123/\n\n"
@@ -613,7 +702,11 @@ def handle_message(message):
             "• https://www.facebook.com/username/videos/1234567890\n"
             "• https://fb.watch/abc123/\n"
             "• https://fb.com/username/videos/1234567890\n\n"
-            "👉 Hãy copy link từ TikTok hoặc Facebook và gửi lại cho bot!"
+            "🎥 **Mẫu link YouTube:**\n"
+            "• https://www.youtube.com/watch?v=abc123\n"
+            "• https://youtu.be/abc123\n"
+            "• https://www.youtube.com/shorts/abc123\n\n"
+            "👉 Hãy copy link từ TikTok, Facebook hoặc YouTube và gửi lại cho bot!"
         )
         bot.reply_to(message, error_message)
         return
@@ -647,7 +740,7 @@ def handle_message(message):
             {"name": "Máy chủ Không Logo (API 4)", "func": call_api_4_no_watermark2},
             {"name": "Máy chủ 7scorp (API 5)", "func": call_api_5_7scorp}
         ]
-    else:
+    elif is_facebook:
         # 5 máy chủ Facebook xoay tua
         api_servers = [
             {"name": "Facebook Server (mahmudul)", "func": call_fb_api_mahmudul},
@@ -655,6 +748,11 @@ def handle_message(message):
             {"name": "Facebook Server 3 (Social Media V3 HD)", "func": call_fb_api_social_media_v3},
             {"name": "Facebook Server 4 (All In One POST)", "func": call_fb_api_social_download_all_in_one},
             {"name": "Facebook Server 5 (Media API)", "func": call_fb_api_media_download_url}
+        ]
+    else:
+        # 1 máy chủ YouTube (sẽ thêm nhiều hơn sau)
+        api_servers = [
+            {"name": "YouTube Server (DataFanatic)", "func": call_yt_api_datafanatic_details}
         ]
 
     video_link, caption = None, None
@@ -689,8 +787,10 @@ def handle_message(message):
     else:
         if is_tiktok:
             error_msg = "💥 Toàn bộ hệ thống 5 máy chủ TikTok đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!"
-        else:
+        elif is_facebook:
             error_msg = "💥 Toàn bộ hệ thống 5 máy chủ Facebook đều không phản hồi link này. Hãy thử lại sau!"
+        else:
+            error_msg = "💥 Hệ thống YouTube không phản hồi link này. Hãy thử lại sau!"
         bot.edit_message_text(error_msg, chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
