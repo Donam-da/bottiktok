@@ -3,66 +3,82 @@ import requests
 import telebot
 
 # =======================================================
-# CẤU HÌNH THÔNG TIN BOT VÀ API
+# CẤU HÌNH THÔNG TIN BOT VÀ CÁC API KEYS
 # =======================================================
 
-# Điền Token Bot Telegram của bạn
 BOT_TOKEN = "8937782880:AAE6Gsxh_SeCG5nkoEQHCHyfsnTWJ14SoiM"
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# Key dùng chung của tài khoản RapidAPI của bạn
 RAPIDAPI_KEY = "525e0b9934msha396ecf14d009c9p1dcadajsn39105b0e7627"
-RAPIDAPI_HOST = "tiktok-scrapper-videos-music-challenges-downloader.p.rapidapi.com"
 
 
 # =======================================================
-# HÀM BÓC TÁCH ID VÀ GỌI API CHUẨN JSON THỰC TẾ
+# MÁY CHỦ 1: TikTok Scrapper (Con cũ đang chạy ngon)
 # =======================================================
 def extract_video_id(url):
-    """Sử dụng Regex để bóc chuỗi số ID từ link TikTok dài."""
+    """Bóc chuỗi số ID từ link dài để cấp cho API 1."""
     match = re.search(r"video/(\d+)", url)
-    if match:
-        return match.group(1)
-    return None
+    return match.group(1) if match else None
 
 
-def get_tiktok_video(video_id):
-    """Gọi lên API chính xác theo định dạng Path Params dựa trên ảnh thực tế."""
-    # Định dạng API bắt buộc điền ID thẳng vào URL (Path Parameter)
-    url = f"https://{RAPIDAPI_HOST}/video/{video_id}"
-
+def call_api_1_scrapper(video_id):
+    host = "tiktok-scrapper-videos-music-challenges-downloader.p.rapidapi.com"
+    url = f"https://{host}/video/{video_id}"
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": RAPIDAPI_HOST,
+        "x-rapidapi-host": host,
         "Content-Type": "application/json",
     }
-
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, headers=headers, timeout=12)
         if response.status_code == 200:
             res_json = response.json()
-
-            # Đi sâu vào đúng các tầng dữ liệu của JSON thực tế bạn gửi
             data_block = res_json.get("data", {})
             aweme_detail = data_block.get("aweme_detail", {})
 
-            # 1. Lấy tiêu đề bài đăng (Trường 'desc')
-            caption = aweme_detail.get(
-                "desc", "Chúc bạn xem video vui vẻ! 🎬"
+            caption = aweme_detail.get("desc", "")
+            url_list = aweme_detail.get("video", {}).get("play_addr", {}).get(
+                "url_list", []
             )
 
-            # 2. Đi vào object 'video' -> 'play_addr' -> 'url_list'
-            video_block = aweme_detail.get("video", {})
-            play_addr = video_block.get("play_addr", {})
-            url_list = play_addr.get("url_list", [])
-
-            # Lấy đường link video đầu tiên trong danh sách
             if url_list:
-                video_url = url_list[0]
-                return video_url, caption
-
+                return url_list[0], caption
     except Exception as e:
-        print(f"[-] Lỗi kết nối API: {e}")
+        print(f"[-] API 1 (Scrapper) gặp sự cố: {e}")
+    return None, None
 
+
+# =======================================================
+# MÁY CHỦ 2 (MỚI THÊM): Social Media Video Downloader
+# =======================================================
+def call_api_2_social_media(tiktok_url):
+    """Gọi con API mới tích hợp, truyền thẳng nguyên link gốc."""
+    host = "social-media-video-downloader.p.rapidapi.com"
+    url = f"https://{host}/tiktok/v3/post/details"
+
+    querystring = {"url": tiktok_url}
+    headers = {"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": host}
+
+    try:
+        response = requests.get(
+            url, headers=headers, params=querystring, timeout=12
+        )
+        if response.status_code == 200:
+            res_json = response.json()
+
+            # Bóc tách chuẩn cấu trúc JSON tầng lớp trong ảnh image_5ccd84.png của bạn
+            contents = res_json.get("contents", [])
+            if contents:
+                first_content = contents[0]
+                videos = first_content.get("videos", [])
+                if videos:
+                    # Lấy phần tử video đầu tiên (thường là bản 540p hoặc HD)
+                    video_url = videos[0].get("url")
+                    caption = "Video tải từ máy chủ dự phòng 🚀"
+                    return video_url, caption
+    except Exception as e:
+        print(f"[-] API 2 (Social Media) gặp sự cố: {e}")
     return None, None
 
 
@@ -73,12 +89,11 @@ def get_tiktok_video(video_id):
 
 @bot.message_handler(commands=["start", "help"])
 def send_welcome(message):
-    welcome_text = (
-        "👋 Xin chào Nam! Tôi là Bot tải video TikTok.\n\n"
-        "👉 Hãy gửi một đường link video TikTok bất kỳ (chuẩn máy tính), "
-        "tôi sẽ xử lý và tải video về cho bạn!"
+    bot.reply_to(
+        message,
+        "👋 Xin chào Nam! Tôi là Bot tải video TikTok phiên bản nâng cấp có máy chủ dự phòng xoay tua.\n\n"
+        "👉 Hãy gửi link video TikTok vào đây, tôi sẽ lo phần còn lại!",
     )
-    bot.reply_to(message, welcome_text)
 
 
 @bot.message_handler(
@@ -86,58 +101,66 @@ def send_welcome(message):
     or message.text.startswith("http")
 )
 def handle_message(message):
-    tiktok_url = message.text.strip()
-
+    raw_url = message.text.strip()
     status_msg = bot.reply_to(
         message, "⏳ Đang bóc tách dữ liệu video, bạn chờ một chút nhé..."
     )
 
-    # Bước 1: Trích xuất ID từ link người dùng gửi
-    video_id = extract_video_id(tiktok_url)
+    # Tự động giải mã nếu người dùng gửi link rút gọn trên điện thoại
+    if "vt.tiktok.com" in raw_url or "vm.tiktok.com" in raw_url:
+        try:
+            response = requests.head(raw_url, allow_redirects=True, timeout=8)
+            raw_url = response.url
+        except Exception:
+            pass
 
-    if not video_id:
+    video_link, caption = None, None
+
+    # ──── [BƯỚC 1]: THỬ CHẠY MÁY CHỦ 1 ────
+    video_id = extract_video_id(raw_url)
+    if video_id:
+        print(f"[+] Thử tải qua API 1 (ID: {video_id})...")
+        video_link, caption = call_api_1_scrapper(video_id)
+
+    # ──── [BƯỚC 2]: XOAY TUA SANG MÁY CHỦ 2 NẾU MÁY CHỦ 1 LỖI ────
+    if not video_link:
+        print("[-] API 1 thất bại! Tự động xoay tua sang API 2...")
         bot.edit_message_text(
-            "❌ Link không đúng định dạng. Hiện tại hệ thống chỉ hỗ trợ link đầy đủ dạng máy tính (có chứa /video/ID).",
+            "⚡ Máy chủ chính bận, đang chuyển sang máy chủ dự phòng...",
             chat_id=message.chat.id,
             message_id=status_msg.message_id,
         )
-        return
+        video_link, caption = call_api_2_social_media(raw_url)
 
-    print(f"[+] Tìm thấy ID: {video_id}. Tiến hành gọi API...")
-
-    # Bước 2: Gọi API lấy link tải trực tiếp
-    video_link, caption = get_tiktok_video(video_id)
-
-    # Bước 3: Gửi trả video cho User
+    # ──── [BƯỚC 3]: GỬI TRẢ KẾT QUẢ CHO USER ────
     if video_link:
         try:
             bot.edit_message_text(
-                "🚀 Tìm thấy video! Đang tải và gửi lên Telegram...",
+                "🚀 Đang gửi video lên Telegram...",
                 chat_id=message.chat.id,
                 message_id=status_msg.message_id,
             )
-
             bot.send_video(
-                chat_id=message.chat.id, video=video_link, caption=caption
+                chat_id=message.chat.id,
+                video=video_link,
+                caption=caption if caption else "🎬",
             )
-
             bot.delete_message(message.chat.id, status_msg.message_id)
-            print("[+] Gửi video thành công!")
-
+            print("[+] Hoàn tất gửi video thành công!")
         except Exception as e:
             bot.edit_message_text(
-                f"❌ Lỗi gửi file: {e}",
+                f"❌ Lỗi gửi file lên Telegram: {e}",
                 chat_id=message.chat.id,
                 message_id=status_msg.message_id,
             )
     else:
         bot.edit_message_text(
-            "💥 Không thể lấy được video từ API này. Vui lòng kiểm tra lại trạng thái gói cước trên RapidAPI.",
+            "💥 Tất cả máy chủ (chính và dự phòng) đều không phản hồi link này. Vui lòng kiểm tra lại link hoặc thử lại sau!",
             chat_id=message.chat.id,
             message_id=status_msg.message_id,
         )
 
 
 if __name__ == "__main__":
-    print("[*] Telegram Bot đang lắng nghe tin nhắn...")
+    print("[*] Telegram Bot ĐA MÁY CHỦ đang hoạt động...")
     bot.infinity_polling()
