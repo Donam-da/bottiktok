@@ -39,7 +39,7 @@ cp .env.example .env
 python bottiktok.py
 ```
 
-## Deploy lên Render (Chạy 24/7)
+## Deploy lên Render (Chạy 24/7 với Webhook)
 
 ### Bước 1: Chuẩn bị GitHub
 
@@ -63,12 +63,15 @@ python bottiktok.py
 **Build & Deploy:**
 - **Runtime**: Python 3
 - **Build Command**: `pip install -r requirements.txt`
-- **Start Command**: `python bottiktok.py`
+- **Start Command**: `gunicorn bottiktok:app`
 
 **Environment Variables:**
 Thêm các biến môi trường sau:
-- `BOT_TOKEN`: Token bot Telegram của bạn (8937782880:AAE6Gsxh_SeCG5nkoEQHCHyfsnTWJ14SoiM)
-- `RAPIDAPI_KEY`: RapidAPI key của bạn (525e0b9934msha396ecf14d009c9p1dcadajsn39105b0e7627)
+- `BOT_TOKEN`: Token bot Telegram của bạn
+- `RAPIDAPI_KEY`: RapidAPI key của bạn
+- `GITHUB_TOKEN`: GitHub token (để đọc Gist)
+- `GIST_ID`: ID của Gist chứa danh sách user
+- `RENDER_EXTERNAL_URL`: URL của Render service (Render tự động thêm)
 
 **Instance Type:**
 - Chọn **Free** (hoặc paid nếu cần performance cao hơn)
@@ -78,21 +81,24 @@ Thêm các biến môi trường sau:
 1. Click **Create Web Service**
 2. Render sẽ tự động build và deploy
 3. Chờ vài phút để deployment hoàn tất
-4. Bot sẽ chạy 24/7 trên Render
+4. Bot sẽ tự động set webhook và chạy 24/7 trên Render
 
 ### Bước 5: Kiểm tra
 
 1. Vào tab **Logs** trên Render để xem log của bot
 2. Test bot trên Telegram
 3. Bot sẽ phản hồi như khi chạy local
+4. Webhook sẽ tự động được cấu hình khi deploy
 
 ## Lưu ý quan trọng
 
+- **Webhook mode**: Bot sử dụng webhook khi deploy lên Render, giúp tiết kiệm tài nguyên và phản hồi nhanh hơn
 - **Free tier** trên Render sẽ sleep sau 15 phút không hoạt động và cần ~30s để wake up
 - Để bot luôn active, có thể:
   - Sử dụng paid tier ($7/tháng)
-  - Hoặc dùng service keep-alive (uptimerobot.com) để ping định kỳ
+  - Hoặc dùng service keep-alive (uptimerobot.com) để ping định kỳ endpoint `/health`
 - Token và API key được lưu trong Environment Variables trên Render, không cần file `.env`
+- Bot tự động chuyển giữa webhook (Render) và polling (local) dựa trên biến môi trường `RENDER_EXTERNAL_URL`
 
 ## Troubleshooting
 
