@@ -376,6 +376,33 @@ def call_fb_api_mahmudul(fb_url):
     return None, None
 
 
+def call_fb_api_full_downloader(fb_url):
+    """FB Máy chủ 2: Full Downloader Social Media (Cấu trúc phẳng, siêu nhanh)"""
+    host = "full-downloader-social-media.p.rapidapi.com"
+    url = f"https://{host}/"
+    
+    querystring = {"url": fb_url}
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host
+    }
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            
+            # Bóc tách trực tiếp lớp ngoài cùng theo đúng Response body trong ảnh
+            video_url = res_json.get('download_url')
+            caption = res_json.get('caption') or "Video tải từ Facebook Server 2 🚀"
+            
+            if video_url:
+                print("[+] FB API 2 (Full Downloader) bóc link thành công!")
+                return video_url, caption
+    except Exception as e:
+        print(f"[-] FB API 2 gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
@@ -397,10 +424,9 @@ def is_valid_tiktok_url(url):
 def is_valid_facebook_url(url):
     """Kiểm tra xem link có phải là Facebook hợp lệ không"""
     fb_patterns = [
-        r'https?://(www\.)?facebook\.com/.*',
+        r'https?://(www\.|web\.|m\.)?facebook\.com/.*',
         r'https?://(www\.)?fb\.watch/.*',
-        r'https?://(www\.)?fb\.com/.*',
-        r'https?://(m\.)?facebook\.com/.*'
+        r'https?://(www\.)?fb\.com/.*'
     ]
     for pattern in fb_patterns:
         if re.match(pattern, url, re.IGNORECASE):
@@ -520,9 +546,10 @@ def handle_message(message):
             {"name": "Máy chủ 7scorp (API 5)", "func": call_api_5_7scorp}
         ]
     else:
-        # 1 máy chủ Facebook
+        # 2 máy chủ Facebook xoay tua
         api_servers = [
-            {"name": "Facebook Server (mahmudul)", "func": call_fb_api_mahmudul}
+            {"name": "Facebook Server (mahmudul)", "func": call_fb_api_mahmudul},
+            {"name": "Facebook Server 2 (Full Downloader)", "func": call_fb_api_full_downloader}
         ]
 
     video_link, caption = None, None
@@ -558,7 +585,7 @@ def handle_message(message):
         if is_tiktok:
             error_msg = "💥 Toàn bộ hệ thống 5 máy chủ TikTok đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!"
         else:
-            error_msg = "💥 Máy chủ Facebook không phản hồi link này. Hãy thử lại sau!"
+            error_msg = "💥 Toàn bộ hệ thống 2 máy chủ Facebook đều không phản hồi link này. Hãy thử lại sau!"
         bot.edit_message_text(error_msg, chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
