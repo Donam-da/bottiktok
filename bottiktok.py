@@ -67,7 +67,7 @@ def save_usage_data(data):
         print(f"[-] Lỗi khi lưu dữ liệu sử dụng: {e}")
 
 def get_tiktok_allowed_users():
-    """Đọc danh sách user có quyền từ Gist"""
+    """Đọc danh sách user có quyền từ Gist (để tương thích ngược)"""
     if not GITHUB_TOKEN or not GIST_ID:
         print("[-] Thiếu GITHUB_TOKEN hoặc GIST_ID trong biến môi trường")
         return []
@@ -89,6 +89,66 @@ def get_tiktok_allowed_users():
     except Exception as e:
         print(f"[-] Lỗi khi đọc danh sách user có quyền từ Gist: {e}")
         return []
+
+def get_notification_allowed_users():
+    """Đọc danh sách user có quyền từ bot thông báo (notification_allowed_users.json)"""
+    try:
+        headers = {'Authorization': f'token {GITHUB_TOKEN}'}
+        res = requests.get(f'https://api.github.com/gists/{GIST_ID}', headers=headers)
+        if res.status_code == 200:
+            gist_data = res.json()
+            files = gist_data.get('files', {})
+            if 'notification_allowed_users.json' in files:
+                content = files['notification_allowed_users.json']['content']
+                data = json.loads(content)
+                # notification_allowed_users.json là mảng trực tiếp
+                if isinstance(data, list):
+                    print(f"[+] Đã tải {len(data)} user có quyền từ bot thông báo")
+                    return data
+        print(f"[-] Lỗi tải notification_allowed_users: {res.status_code}")
+        return []
+    except Exception as e:
+        print(f"[-] Lỗi khi đọc danh sách user có quyền từ bot thông báo: {e}")
+        return []
+
+def get_notification_public_users():
+    """Đọc danh sách user public mode từ bot thông báo"""
+    try:
+        headers = {'Authorization': f'token {GITHUB_TOKEN}'}
+        res = requests.get(f'https://api.github.com/gists/{GIST_ID}', headers=headers)
+        if res.status_code == 200:
+            gist_data = res.json()
+            files = gist_data.get('files', {})
+            if 'notification_public_users.json' in files:
+                content = files['notification_public_users.json']['content']
+                data = json.loads(content)
+                if isinstance(data, dict):
+                    public_user_ids = [int(k) for k in data.keys()]
+                    print(f"[+] Đã tải {len(public_user_ids)} user public mode từ bot thông báo")
+                    return public_user_ids
+        return []
+    except Exception as e:
+        print(f"[-] Lỗi khi đọc danh sách user public mode: {e}")
+        return []
+
+def get_notification_public_mode():
+    """Kiểm tra xem public mode có đang bật không"""
+    try:
+        headers = {'Authorization': f'token {GITHUB_TOKEN}'}
+        res = requests.get(f'https://api.github.com/gists/{GIST_ID}', headers=headers)
+        if res.status_code == 200:
+            gist_data = res.json()
+            files = gist_data.get('files', {})
+            if 'notification_public_mode.json' in files:
+                content = files['notification_public_mode.json']['content']
+                data = json.loads(content)
+                is_public = data.get('is_public', False)
+                print(f"[+] Public mode status: {is_public}")
+                return is_public
+        return False
+    except Exception as e:
+        print(f"[-] Lỗi khi kiểm tra public mode: {e}")
+        return False
 
 def get_notification_blocklist():
     """Đọc danh sách user bị block từ Gist"""
@@ -115,14 +175,32 @@ def get_notification_blocklist():
         return []
 
 def is_user_authorized(user_id):
-    """Kiểm tra xem user có quyền sử dụng bot TikTok không"""
+    """Kiểm tra xem user có quyền sử dụng bot TikTok không (đã có pass bot thông báo)"""
     # Admin luôn có quyền
     if user_id == ADMIN_ID:
         return True
     
-    # Đọc danh sách user có quyền từ Gist
-    allowed_users = get_tiktok_allowed_users()
+    # Đọc danh sách user có quyền từ bot thông báo
+    allowed_users = get_notification_allowed_users()
     return user_id in allowed_users
+
+def is_user_public(user_id):
+    """Kiểm tra xem user có đang ở public mode không (user lạ tạm thời)"""
+    # Admin không phải public user
+    if user_id == ADMIN_ID:
+        return False
+    
+    # Nếu đã có quyền đầy đủ, không phải public user
+    if is_user_authorized(user_id):
+        return False
+    
+    # Kiểm tra public mode và danh sách public users
+    is_public_mode = get_notification_public_mode()
+    if not is_public_mode:
+        return False
+    
+    public_users = get_notification_public_users()
+    return user_id in public_users
 
 def is_user_blocked(user_id):
     """Kiểm tra xem user có bị block từ bot thông báo không"""
@@ -134,17 +212,27 @@ def is_user_blocked(user_id):
     blocklist = get_notification_blocklist()
     return user_id in blocklist
 
-def check_daily_limit(user_id):
-    """Kiểm tra user đã vượt giới hạn ngày chưa"""
+def check_daily_limit(user_id, platform='tiktok'):
+    """Kiểm tra user đã vượt giới hạn ngày chưa (phân biệt TikTok và Facebook)"""
     # Admin không bị giới hạn
     if user_id == ADMIN_ID:
         return True, 0
     
-    # Xác định giới hạn dựa trên quyền của user
+    # Xác định giới hạn dựa trên quyền của user và nền tảng
     if is_user_authorized(user_id):
-        daily_limit = 5  # User có quyền: 5 video/ngày
+        # User đã có pass bot thông báo
+        if platform == 'tiktok':
+            daily_limit = 3  # TikTok: 3 video/ngày
+        elif platform == 'facebook':
+            daily_limit = 2  # Facebook: 2 video/ngày
+        else:
+            daily_limit = 3  # Mặc định
+    elif is_user_public(user_id):
+        # User public mode (user lạ tạm thời)
+        daily_limit = 1  # Cả TikTok và Facebook: 1 video/ngày
     else:
-        daily_limit = 1  # User không có quyền: 1 video/ngày
+        # User hoàn toàn lạ (không có pass, không public)
+        daily_limit = 1  # Cả TikTok và Facebook: 1 video/ngày
     
     user_id_str = str(user_id)
     today = str(date.today())
@@ -153,18 +241,24 @@ def check_daily_limit(user_id):
     
     # Reset count nếu ngày mới
     if user_id_str not in data or data[user_id_str].get('date') != today:
-        data[user_id_str] = {'date': today, 'count': 0}
+        data[user_id_str] = {'date': today, 'tiktok_count': 0, 'facebook_count': 0}
         save_usage_data(data)
     
-    count = data[user_id_str]['count']
+    # Lấy count theo nền tảng
+    if platform == 'tiktok':
+        count = data[user_id_str].get('tiktok_count', 0)
+    elif platform == 'facebook':
+        count = data[user_id_str].get('facebook_count', 0)
+    else:
+        count = data[user_id_str].get('tiktok_count', 0) + data[user_id_str].get('facebook_count', 0)
     
     if count >= daily_limit:
         return False, count
     
     return True, count
 
-def increment_usage(user_id):
-    """Tăng count sử dụng cho user"""
+def increment_usage(user_id, platform='tiktok'):
+    """Tăng count sử dụng cho user (phân biệt TikTok và Facebook)"""
     if user_id == ADMIN_ID:
         return
     
@@ -174,9 +268,13 @@ def increment_usage(user_id):
     data = load_usage_data()
     
     if user_id_str not in data or data[user_id_str].get('date') != today:
-        data[user_id_str] = {'date': today, 'count': 1}
-    else:
-        data[user_id_str]['count'] += 1
+        data[user_id_str] = {'date': today, 'tiktok_count': 0, 'facebook_count': 0}
+    
+    # Tăng count theo nền tảng
+    if platform == 'tiktok':
+        data[user_id_str]['tiktok_count'] = data[user_id_str].get('tiktok_count', 0) + 1
+    elif platform == 'facebook':
+        data[user_id_str]['facebook_count'] = data[user_id_str].get('facebook_count', 0) + 1
     
     save_usage_data(data)
 
@@ -749,16 +847,28 @@ def send_welcome(message):
     
     # Kiểm tra quyền từ bot thông báo
     if is_user_authorized(user_id):
-        # User có quyền: giới hạn 5 video/ngày
+        # User đã có pass bot thông báo
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
-                              "📊 Limit: 5 video/ngày")
+                              "📊 Limit:\n"
+                              "• TikTok: 3 video/ngày\n"
+                              "• Facebook: 2 video/ngày\n\n"
+                              "✅ Bạn đã có pass bot thông báo!")
+    elif is_user_public(user_id):
+        # User public mode (user lạ tạm thời)
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+                              "📊 Limit: 1 video/ngày (Dùng thử - Public Mode)\n\n"
+                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 3, Facebook 2 video/ngày\n"
+                              "📞 Ib saler: @itisnotmyfault0\n\n"
+                              "🖥️ Muốn sử dụng app tb trên máy mình\n"
+                              "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
     else:
-        # User không có quyền: giới hạn 1 video/ngày
+        # User hoàn toàn lạ
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
-                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên 5 video/ngày\n"
+                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 3, Facebook 2 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
@@ -777,21 +887,6 @@ def handle_message(message):
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
-        return
-    
-    # Không chặn user không có quyền - cho phép dùng thử với giới hạn 1 video/ngày
-    
-    # Kiểm tra giới hạn sử dụng hàng ngày
-    can_use, current_count = check_daily_limit(user_id)
-    if not can_use:
-        # Xác định giới hạn dựa trên quyền của user
-        daily_limit = 5 if is_user_authorized(user_id) else 1
-        limit_message = (
-            f"⚠️ Bạn đã dùng hết {daily_limit} lượt tải video hôm nay!\n\n"
-            f"📊 Số lượt đã dùng: {current_count}/{daily_limit}\n"
-            f"🔄 Hãy quay lại vào ngày mai để tiếp tục sử dụng!"
-        )
-        bot.reply_to(message, limit_message)
         return
     
     # Kiểm tra link có phải TikTok, Facebook hay YouTube hợp lệ không
@@ -827,8 +922,29 @@ def handle_message(message):
         bot.reply_to(message, error_message)
         return
     
-    # Tăng count sử dụng
-    increment_usage(user_id)
+    # Không chặn user không có quyền - cho phép dùng thử với giới hạn 1 video/ngày
+    
+    # Kiểm tra giới hạn sử dụng hàng ngày (phân biệt TikTok và Facebook)
+    platform = 'tiktok' if is_tiktok else 'facebook'
+    can_use, current_count = check_daily_limit(user_id, platform)
+    if not can_use:
+        # Xác định giới hạn dựa trên quyền của user và nền tảng
+        if is_user_authorized(user_id):
+            daily_limit = 3 if platform == 'tiktok' else 2
+        else:
+            daily_limit = 1
+        
+        platform_name = 'TikTok' if platform == 'tiktok' else 'Facebook'
+        limit_message = (
+            f"⚠️ Bạn đã dùng hết {daily_limit} lượt tải video {platform_name} hôm nay!\n\n"
+            f"📊 Số lượt đã dùng: {current_count}/{daily_limit}\n"
+            f"🔄 Hãy quay lại vào ngày mai để tiếp tục sử dụng!"
+        )
+        bot.reply_to(message, limit_message)
+        return
+    
+    # Tăng count sử dụng theo nền tảng
+    increment_usage(user_id, platform)
     
     status_msg = bot.reply_to(message, "Process: 0%")
     
