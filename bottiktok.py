@@ -526,7 +526,7 @@ def call_yt_api_datafanatic_details(yt_url):
     # Cấu hình các tham số chuẩn theo đúng giao diện web bạn đã test
     querystring = {
         "videoId": video_id,
-        "urlAccess": "normal",
+        "urlAccess": "direct", # Dùng link trực tiếp để Telegram có thể tải được
         "videos": "auto",
         "audios": "auto"
     }
@@ -538,8 +538,10 @@ def call_yt_api_datafanatic_details(yt_url):
     
     try:
         response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        print(f"[*] YT API 1 Response status: {response.status_code}")
         if response.status_code == 200:
             res_json = response.json()
+            print(f"[*] YT API 1 Response JSON: {res_json}")
             
             # Tiêu đề video làm Caption
             caption = res_json.get('title') or "Video tải từ YouTube Server 1 🎥"
@@ -599,8 +601,10 @@ def call_yt_api_fast_downloader_v2(yt_url):
     
     try:
         response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        print(f"[*] YT API 2 Response status: {response.status_code}")
         if response.status_code == 200:
             res_json = response.json()
+            print(f"[*] YT API 2 Response JSON: {res_json}")
             
             # Phân tách kết quả trả về từ API
             video_url = res_json.get('url') or res_json.get('download_url') or res_json.get('video_url')
@@ -627,7 +631,7 @@ def call_yt_api_shorts_downloader_v3(yt_url):
     # Cấu hình các tham số Query Params chuẩn chỉ theo đúng ảnh test của bạn
     querystring = {
         "videoId": video_id,
-        "urlAccess": "proxied", # Dùng proxy của hệ thống để né lỗi 403 chặn từ Youtube
+        "urlAccess": "normal", # Dùng link trực tiếp để Telegram có thể tải được
         "renderableFormats": "720p,highres", # Ép API gộp sẵn tiếng chất lượng cao
         "getTranscript": "false"
     }
@@ -639,16 +643,31 @@ def call_yt_api_shorts_downloader_v3(yt_url):
     
     try:
         response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        print(f"[*] YT API 3 Response status: {response.status_code}")
         if response.status_code == 200:
             res_json = response.json()
+            print(f"[*] YT API 3 Response JSON: {res_json}")
             
             # Cấu trúc JSON đặc trưng của nhà phát triển này (Bọc trong mảng contents)
             contents = res_json.get('contents', [])
             if contents:
                 videos = contents[0].get('videos', [])
+                print(f"[*] YT API 3 Videos block: {videos}")
                 if videos:
-                    # Lấy trực tiếp link video đã render sẵn tiếng ở lớp ngoài
-                    video_url = videos[0].get('url')
+                    # Tìm link không phải tunnel/redirector
+                    video_url = None
+                    for video in videos:
+                        url = video.get('url')
+                        if url and 'tunnel' not in url and 'redirector' not in url:
+                            video_url = url
+                            print(f"[+] Tìm thấy link trực tiếp: {video_url}")
+                            break
+                    
+                    # Nếu không tìm thấy link trực tiếp, lấy link đầu tiên
+                    if not video_url:
+                        video_url = videos[0].get('url')
+                        print(f"[-] Chỉ tìm thấy link tunnel: {video_url}")
+                    
                     caption = contents[0].get('title') or "Video tải từ YouTube Server 3 💎"
                     print("[+] YT API 3 (Shorts Downloader) bóc link thành công!")
                     return video_url, caption
@@ -679,12 +698,12 @@ def is_valid_tiktok_url(url):
 def is_valid_facebook_url(url):
     """Kiểm tra xem link có phải là Facebook hợp lệ không"""
     fb_patterns = [
-        r'https?://(www\.|web\.|m\.)?facebook\.com/.*',
-        r'https?://(www\.)?fb\.watch/.*',
-        r'https?://(www\.)?fb\.com/.*'
+        r'https?://(www\.|web\.|m\.)?facebook\.com/',
+        r'https?://(www\.)?fb\.watch/',
+        r'https?://(www\.)?fb\.com/'
     ]
     for pattern in fb_patterns:
-        if re.match(pattern, url, re.IGNORECASE):
+        if re.search(pattern, url, re.IGNORECASE):
             return True
     return False
 
@@ -692,14 +711,14 @@ def is_valid_facebook_url(url):
 def is_valid_youtube_url(url):
     """Kiểm tra xem link có phải là YouTube hợp lệ không"""
     yt_patterns = [
-        r'https?://(www\.)?youtube\.com/watch\?v=.*',
-        r'https?://(www\.)?youtube\.com/shorts/.*',
-        r'https?://(www\.)?youtube\.com/embed/.*',
-        r'https?://(www\.)?youtu\.be/.*',
-        r'https?://(www\.)?youtube\.com/v/.*'
+        r'https?://(www\.)?youtube\.com/watch\?v=',
+        r'https?://(www\.)?youtube\.com/shorts/',
+        r'https?://(www\.)?youtube\.com/embed/',
+        r'https?://(www\.)?youtu\.be/',
+        r'https?://(www\.)?youtube\.com/v/'
     ]
     for pattern in yt_patterns:
-        if re.match(pattern, url, re.IGNORECASE):
+        if re.search(pattern, url, re.IGNORECASE):
             return True
     return False
 
@@ -770,9 +789,20 @@ def handle_message(message):
     is_facebook = is_valid_facebook_url(raw_url)
     is_youtube = is_valid_youtube_url(raw_url)
     
-    if not is_tiktok and not is_facebook and not is_youtube:
+    print(f"[*] Debug: is_tiktok={is_tiktok}, is_facebook={is_facebook}, is_youtube={is_youtube}")
+    print(f"[*] Debug: URL={raw_url}")
+    
+    # Nếu là YouTube, thông báo tính năng đang phát triển
+    if is_youtube:
+        bot.reply_to(message, "🚧 Tính năng tải video YouTube đang được phát triển!\n\n"
+                              "🔧 Chúng tôi đang hoàn thiện để mang lại trải nghiệm tốt nhất.\n"
+                              "📢 Theo dõi để nhận thông báo khi tính năng sẵn sàng!\n\n"
+                              "👉 Hiện tại bạn có thể tải video TikTok và Facebook.")
+        return
+    
+    if not is_tiktok and not is_facebook:
         error_message = (
-            "❌ Link không hợp lệ! Vui lòng nhập lại link TikTok, Facebook hoặc YouTube đúng.\n\n"
+            "❌ Link không hợp lệ! Vui lòng nhập lại link TikTok hoặc Facebook đúng.\n\n"
             "📱 **Mẫu link TikTok trên điện thoại:**\n"
             "• https://vm.tiktok.com/ZM6abc123/\n"
             "• https://vt.tiktok.com/ZM6abc123/\n\n"
@@ -782,11 +812,7 @@ def handle_message(message):
             "• https://www.facebook.com/username/videos/1234567890\n"
             "• https://fb.watch/abc123/\n"
             "• https://fb.com/username/videos/1234567890\n\n"
-            "🎥 **Mẫu link YouTube:**\n"
-            "• https://www.youtube.com/watch?v=abc123\n"
-            "• https://youtu.be/abc123\n"
-            "• https://www.youtube.com/shorts/abc123\n\n"
-            "👉 Hãy copy link từ TikTok, Facebook hoặc YouTube và gửi lại cho bot!"
+            "👉 Hãy copy link từ TikTok hoặc Facebook và gửi lại cho bot!"
         )
         bot.reply_to(message, error_message)
         return
@@ -865,6 +891,8 @@ def handle_message(message):
             bot.delete_message(message.chat.id, status_msg.message_id)
             print("[+] Đã gửi thành công video!")
         except Exception as e:
+            print(f"[-] Lỗi chi tiết khi tải video lên Telegram: {e}")
+            print(f"[-] Video link: {video_link}")
             bot.edit_message_text(f"❌ Lỗi khi tải video lên Telegram: {e}", chat_id=message.chat.id, message_id=status_msg.message_id)
     else:
         if is_tiktok:
