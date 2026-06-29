@@ -128,8 +128,8 @@ def call_api_4_no_watermark2(tiktok_url):
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "👋 Xin chào Nam! Hệ thống tải TikTok Siêu Cấp Đa Máy Chủ (4 Lõi Xoay Tua) đã sẵn sàng.\n\n"
-                          "👉 Gửi link video vào đây, Bot tự động quét tìm máy chủ ngon nhất để bóc link không logo!")
+    bot.reply_to(message, "👋 Xin chào Nam! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
+                          "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!")
 
 
 @bot.message_handler(func=lambda message: "tiktok.com" in message.text.lower() or message.text.startswith('http'))
