@@ -904,17 +904,7 @@ def is_valid_facebook_url(url):
 
 
 def is_valid_youtube_url(url):
-    """Kiểm tra xem link có phải là YouTube hợp lệ không"""
-    yt_patterns = [
-        r'https?://(www\.)?youtube\.com/watch\?v=',
-        r'https?://(www\.)?youtube\.com/shorts/',
-        r'https?://(www\.)?youtube\.com/embed/',
-        r'https?://(www\.)?youtu\.be/',
-        r'https?://(www\.)?youtube\.com/v/'
-    ]
-    for pattern in yt_patterns:
-        if re.search(pattern, url, re.IGNORECASE):
-            return True
+    """Kiểm tra xem link có phải là YouTube hợp lệ không (Đang phát triển - vô hiệu hóa)"""
     return False
 
 
@@ -935,16 +925,16 @@ def send_welcome(message):
     # Kiểm tra quyền từ bot thông báo
     if is_user_authorized(user_id):
         # User đã có pass bot thông báo (đọc từ Gist)
-        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
-                              "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit:\n"
                               "• TikTok: 4 video/ngày\n"
                               "• Facebook: 2 video/ngày\n\n"
                               "✅ Bạn đã có pass bot thông báo!")
     elif is_user_public(user_id):
         # User public mode (user lạ tạm thời)
-        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
-                              "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử - Public Mode)\n\n"
                               "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 4, Facebook 2 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
@@ -952,8 +942,8 @@ def send_welcome(message):
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
     else:
         # User hoàn toàn lạ
-        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok, Facebook & YouTube Siêu Cấp đã sẵn sàng.\n\n"
-                              "👉 Gửi link TikTok, Facebook hoặc YouTube vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
                               "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 4, Facebook 2 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
