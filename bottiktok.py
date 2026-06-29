@@ -614,6 +614,50 @@ def call_yt_api_fast_downloader_v2(yt_url):
     return None, None
 
 
+def call_yt_api_shorts_downloader_v3(yt_url):
+    """YT Máy chủ 3: YouTube Video And Shorts Downloader (Cấu trúc chuẩn theo ảnh)"""
+    # 1. Sử dụng hàm extract_youtube_id có sẵn để lấy ID video
+    video_id = extract_youtube_id(yt_url)
+    if not video_id:
+        return None, None
+        
+    host = "youtube-video-and-shorts-downloader1.p.rapidapi.com"
+    url = f"https://youtube-video-and-shorts-downloader1.p.rapidapi.com/youtube/v3/video/details"
+    
+    # Cấu hình các tham số Query Params chuẩn chỉ theo đúng ảnh test của bạn
+    querystring = {
+        "videoId": video_id,
+        "urlAccess": "proxied", # Dùng proxy của hệ thống để né lỗi 403 chặn từ Youtube
+        "renderableFormats": "720p,highres", # Ép API gộp sẵn tiếng chất lượng cao
+        "getTranscript": "false"
+    }
+    
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            
+            # Cấu trúc JSON đặc trưng của nhà phát triển này (Bọc trong mảng contents)
+            contents = res_json.get('contents', [])
+            if contents:
+                videos = contents[0].get('videos', [])
+                if videos:
+                    # Lấy trực tiếp link video đã render sẵn tiếng ở lớp ngoài
+                    video_url = videos[0].get('url')
+                    caption = contents[0].get('title') or "Video tải từ YouTube Server 3 💎"
+                    print("[+] YT API 3 (Shorts Downloader) bóc link thành công!")
+                    return video_url, caption
+                    
+    except Exception as e:
+        print(f"[-] YT API 3 gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
@@ -786,10 +830,11 @@ def handle_message(message):
             {"name": "Facebook Server 5 (Media API)", "func": call_fb_api_media_download_url}
         ]
     else:
-        # 2 máy chủ YouTube xoay tua
+        # 3 máy chủ YouTube xoay tua
         api_servers = [
             {"name": "YouTube Server (DataFanatic)", "func": call_yt_api_datafanatic_details},
-            {"name": "YouTube FAST Server (24/7)", "func": call_yt_api_fast_downloader_v2}
+            {"name": "YouTube FAST Server (24/7)", "func": call_yt_api_fast_downloader_v2},
+            {"name": "YouTube Shorts Server (V3)", "func": call_yt_api_shorts_downloader_v3}
         ]
 
     video_link, caption = None, None
@@ -827,7 +872,7 @@ def handle_message(message):
         elif is_facebook:
             error_msg = "💥 Toàn bộ hệ thống 5 máy chủ Facebook đều không phản hồi link này. Hãy thử lại sau!"
         else:
-            error_msg = "💥 Toàn bộ hệ thống 2 máy chủ YouTube đều không phản hồi link này. Hãy thử lại sau!"
+            error_msg = "💥 Toàn bộ hệ thống 3 máy chủ YouTube đều không phản hồi link này. Hãy thử lại sau!"
         bot.edit_message_text(error_msg, chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
