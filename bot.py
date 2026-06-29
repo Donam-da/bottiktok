@@ -126,15 +126,45 @@ def call_api_4_no_watermark2(tiktok_url):
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
 
+def is_valid_tiktok_url(url):
+    """Kiểm tra xem link có phải là TikTok hợp lệ không"""
+    tiktok_patterns = [
+        r'https?://(www\.)?tiktok\.com/@[\w\.-]+/video/\d+',
+        r'https?://(www\.)?tiktok\.com/t/[\w-]+',
+        r'https?://(vm|vt)\.tiktok\.com/[\w-]+',
+        r'https?://(www\.)?tiktok\.com/[\w\.-]+/video/\d+'
+    ]
+    for pattern in tiktok_patterns:
+        if re.match(pattern, url, re.IGNORECASE):
+            return True
+    return False
+
+
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     bot.reply_to(message, "👋 Xin chào Nam! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
                           "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!")
 
 
-@bot.message_handler(func=lambda message: "tiktok.com" in message.text.lower() or message.text.startswith('http'))
+@bot.message_handler(func=lambda message: message.text.startswith('http'))
 def handle_message(message):
     raw_url = message.text.strip()
+    
+    # Kiểm tra link có phải TikTok hợp lệ không
+    if not is_valid_tiktok_url(raw_url):
+        error_message = (
+            "❌ Link không hợp lệ! Vui lòng nhập lại link TikTok đúng.\n\n"
+            "📱 **Mẫu link trên điện thoại:**\n"
+            "• https://vm.tiktok.com/ZM6abc123/\n"
+            "• https://vt.tiktok.com/ZM6abc123/\n\n"
+            "💻 **Mẫu link trên máy tính:**\n"
+            "• https://www.tiktok.com/@username/video/1234567890\n"
+            "• https://tiktok.com/@username/video/1234567890\n\n"
+            "👉 Hãy copy link từ TikTok và gửi lại cho bot!"
+        )
+        bot.reply_to(message, error_message)
+        return
+    
     status_msg = bot.reply_to(message, "⏳ Đang kết nối mạng lưới máy chủ phân tích...")
 
     # Giải mã nhanh nếu là link rút gọn trên điện thoại (vt.tiktok hoặc vm.tiktok)
