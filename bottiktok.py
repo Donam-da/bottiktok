@@ -95,6 +95,12 @@ def check_daily_limit(user_id):
     if user_id == ADMIN_ID:
         return True, 0
     
+    # Xác định giới hạn dựa trên quyền của user
+    if is_user_authorized(user_id):
+        daily_limit = 5  # User có quyền: 5 video/ngày
+    else:
+        daily_limit = 1  # User không có quyền: 1 video/ngày
+    
     user_id_str = str(user_id)
     today = str(date.today())
     
@@ -107,7 +113,7 @@ def check_daily_limit(user_id):
     
     count = data[user_id_str]['count']
     
-    if count >= DAILY_LIMIT:
+    if count >= daily_limit:
         return False, count
     
     return True, count
@@ -321,18 +327,20 @@ def send_welcome(message):
     user_id = message.from_user.id
     
     # Kiểm tra quyền từ bot thông báo
-    if not is_user_authorized(user_id):
-        bot.reply_to(message, "🔒 <b>Bạn chưa có quyền sử dụng bot này!</b>\n\n"
-                              "Bot này chỉ dành cho user đã có quyền truy cập bot thông báo.\n"
-                              "Vui lòng liên hệ @itisnotmyfault0 để được cấp quyền.\n\n"
-                              "🔥 Sale 15k/10days - Giá rẻ nhất thị trường!\n"
-                              "✅ Key chính hãng, uy tín 100%\n"
-                              "⚡ Active nhanh chóng, hỗ trợ 24/7", parse_mode="HTML")
-        return
-    
-    bot.reply_to(message, "👋 Xin chào Nam! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
-                          "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
-                          "📊 Limit: 5/video/ngày")
+    if is_user_authorized(user_id):
+        # User có quyền: giới hạn 5 video/ngày
+        bot.reply_to(message, "� Xin chào! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+                              "📊 Limit: 5 video/ngày")
+    else:
+        # User không có quyền: giới hạn 1 video/ngày
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
+                              "� Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+                              "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
+                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên 5 video/ngày\n"
+                              "📞 Ib saler: @itisnotmyfault0\n\n"
+                              "🖥️ Muốn sử dụng app tb trên máy mình\n"
+                              "� Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
 
 
 @bot.message_handler(func=lambda message: message.text.startswith('http'))
@@ -340,22 +348,16 @@ def handle_message(message):
     user_id = message.from_user.id
     raw_url = message.text.strip()
     
-    # Kiểm tra quyền từ bot thông báo
-    if not is_user_authorized(user_id):
-        bot.reply_to(message, "🔒 <b>Bạn chưa có quyền sử dụng bot này!</b>\n\n"
-                              "Bot này chỉ dành cho user đã có quyền truy cập bot thông báo.\n"
-                              "Vui lòng liên hệ @itisnotmyfault0 để được cấp quyền.\n\n"
-                              "🔥 Sale 15k/10days - Giá rẻ nhất thị trường!\n"
-                              "✅ Key chính hãng, uy tín 100%\n"
-                              "⚡ Active nhanh chóng, hỗ trợ 24/7", parse_mode="HTML")
-        return
+    # Không chặn user không có quyền - cho phép dùng thử với giới hạn 1 video/ngày
     
     # Kiểm tra giới hạn sử dụng hàng ngày
     can_use, current_count = check_daily_limit(user_id)
     if not can_use:
+        # Xác định giới hạn dựa trên quyền của user
+        daily_limit = 5 if is_user_authorized(user_id) else 1
         limit_message = (
-            f"⚠️ Bạn đã dùng hết {DAILY_LIMIT} lượt tải video hôm nay!\n\n"
-            f"📊 Số lượt đã dùng: {current_count}/{DAILY_LIMIT}\n"
+            f"⚠️ Bạn đã dùng hết {daily_limit} lượt tải video hôm nay!\n\n"
+            f"📊 Số lượt đã dùng: {current_count}/{daily_limit}\n"
             f"🔄 Hãy quay lại vào ngày mai để tiếp tục sử dụng!"
         )
         bot.reply_to(message, limit_message)
