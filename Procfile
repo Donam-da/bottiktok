@@ -1,1 +1,1 @@
-web: gunicorn bottiktok:app
+web: python bottiktok.py

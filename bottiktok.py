@@ -1033,49 +1033,14 @@ def handle_message(message):
 if __name__ == "__main__":
     print("[*] Bot Telegram Tải TikTok 5 Máy Chủ Xoay Tua Đang Hoạt Động...")
     
+    # Chạy Flask server trong thread riêng biệt cho health check
     port = int(os.environ.get('PORT', 5000))
+    flask_thread = threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': port})
+    flask_thread.daemon = True
+    flask_thread.start()
     
-    # Kiểm tra xem có URL Render không để quyết định dùng webhook hay polling
-    render_url = os.environ.get('RENDER_EXTERNAL_URL')
+    print(f"[*] Flask server đang chạy trên port {port}")
+    print(f"[*] Health check: http://0.0.0.0:{port}/health")
     
-    # Nếu không có RENDER_EXTERNAL_URL, kiểm tra PORT để xác định có phải Render không
-    if not render_url and port != 5000:
-        # Render thường dùng port khác 5000 (ví dụ 10000)
-        # Lấy URL từ biến môi trường RENDER_SERVICE_URL hoặc build từ service name
-        render_url = os.environ.get('RENDER_SERVICE_URL')
-        if not render_url:
-            # Fallback: build URL từ service name nếu có
-            service_name = os.environ.get('RENDER_SERVICE_NAME', 'bottiktok')
-            render_url = f"https://{service_name}.onrender.com"
-    
-    if render_url:
-        # Chạy trên Render - sử dụng webhook
-        webhook_url = f"{render_url}/webhook"
-        print(f"[*] Đang chạy trên Render: {render_url}")
-        print(f"[*] Setting webhook: {webhook_url}")
-        
-        # Xóa webhook cũ nếu có
-        try:
-            bot.remove_webhook()
-        except Exception:
-            pass
-        
-        # Set webhook mới
-        bot.set_webhook(url=webhook_url)
-        
-        # Chạy Flask app (webhook sẽ tự xử lý)
-        app.run(host='0.0.0.0', port=port)
-    else:
-        # Chạy local - sử dụng polling
-        print(f"[*] Chạy local với polling")
-        
-        # Chạy Flask server trong thread riêng biệt
-        flask_thread = threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': port})
-        flask_thread.daemon = True
-        flask_thread.start()
-        
-        print(f"[*] Flask server đang chạy trên port {port}")
-        print(f"[*] Health check: http://0.0.0.0:{port}/health")
-        
-        # Chạy Telegram bot với polling
-        bot.infinity_polling()
+    # Chạy Telegram bot với polling
+    bot.infinity_polling()
