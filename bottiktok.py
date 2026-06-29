@@ -339,6 +339,43 @@ def call_api_5_7scorp(tiktok_url):
     return None, None
 
 
+def call_fb_api_mahmudul(fb_url):
+    """FB Máy chủ: Facebook Video Downloader by mahmudulhasan62894 (Cấu trúc chuẩn theo ảnh)"""
+    host = "facebook-video-downloader9.p.rapidapi.com"
+    url = f"https://{host}/api/v1/videos/download"
+    
+    querystring = {"url": fb_url}
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host
+    }
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            
+            # Đi sâu vào cụm dữ liệu theo đúng ảnh chụp
+            data_block = res_json.get('data', {})
+            video_info = data_block.get('video', {})
+            download_block = data_block.get('download', {})
+            
+            # Lấy caption (tiêu đề video)
+            caption = video_info.get('title') or "Video tải từ Facebook Server 🎬"
+            
+            # Bóc tách link tải: Ưu tiên bản HD chất lượng cao, nếu không có thì lấy bản SD chất lượng thường
+            hd_block = download_block.get('hd', {})
+            sd_block = download_block.get('sd', {})
+            
+            video_url = hd_block.get('url') or sd_block.get('url')
+            
+            if video_url:
+                print("[+] FB API (mahmudul) bóc link thành công!")
+                return video_url, caption
+    except Exception as e:
+        print(f"[-] FB API (mahmudul) gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
@@ -352,6 +389,20 @@ def is_valid_tiktok_url(url):
         r'https?://(www\.)?tiktok\.com/[\w\.-]+/video/\d+'
     ]
     for pattern in tiktok_patterns:
+        if re.match(pattern, url, re.IGNORECASE):
+            return True
+    return False
+
+
+def is_valid_facebook_url(url):
+    """Kiểm tra xem link có phải là Facebook hợp lệ không"""
+    fb_patterns = [
+        r'https?://(www\.)?facebook\.com/.*',
+        r'https?://(www\.)?fb\.watch/.*',
+        r'https?://(www\.)?fb\.com/.*',
+        r'https?://(m\.)?facebook\.com/.*'
+    ]
+    for pattern in fb_patterns:
         if re.match(pattern, url, re.IGNORECASE):
             return True
     return False
@@ -374,16 +425,15 @@ def send_welcome(message):
     # Kiểm tra quyền từ bot thông báo
     if is_user_authorized(user_id):
         # User có quyền: giới hạn 5 video/ngày
-        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
-                              "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 5 video/ngày")
     else:
         # User không có quyền: giới hạn 1 video/ngày
-        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok Siêu Cấp đã sẵn sàng.\n\n"
-                              "👉 Gửi link video vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+        bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
-                              "� Bạn chỉ đến user bot TikTok của tôi để thử 1 lần tải video trên ngày\n\n"
-                              "�💎 Mua pass bot 15k/10d để nâng giới hạn lên 5 video/ngày\n"
+                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên 5 video/ngày\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
@@ -419,17 +469,23 @@ def handle_message(message):
         bot.reply_to(message, limit_message)
         return
     
-    # Kiểm tra link có phải TikTok hợp lệ không
-    if not is_valid_tiktok_url(raw_url):
+    # Kiểm tra link có phải TikTok hay Facebook hợp lệ không
+    is_tiktok = is_valid_tiktok_url(raw_url)
+    is_facebook = is_valid_facebook_url(raw_url)
+    
+    if not is_tiktok and not is_facebook:
         error_message = (
-            "❌ Link không hợp lệ! Vui lòng nhập lại link TikTok đúng.\n\n"
-            "📱 **Mẫu link trên điện thoại:**\n"
+            "❌ Link không hợp lệ! Vui lòng nhập lại link TikTok hoặc Facebook đúng.\n\n"
+            "📱 **Mẫu link TikTok trên điện thoại:**\n"
             "• https://vm.tiktok.com/ZM6abc123/\n"
             "• https://vt.tiktok.com/ZM6abc123/\n\n"
-            "💻 **Mẫu link trên máy tính:**\n"
-            "• https://www.tiktok.com/@username/video/1234567890\n"
-            "• https://tiktok.com/@username/video/1234567890\n\n"
-            "👉 Hãy copy link từ TikTok và gửi lại cho bot!"
+            "💻 **Mẫu link TikTok trên máy tính:**\n"
+            "• https://www.tiktok.com/@username/video/1234567890\n\n"
+            "📘 **Mẫu link Facebook:**\n"
+            "• https://www.facebook.com/username/videos/1234567890\n"
+            "• https://fb.watch/abc123/\n"
+            "• https://fb.com/username/videos/1234567890\n\n"
+            "👉 Hãy copy link từ TikTok hoặc Facebook và gửi lại cho bot!"
         )
         bot.reply_to(message, error_message)
         return
@@ -453,14 +509,21 @@ def handle_message(message):
         except Exception:
             pass
 
-    # DANH SÁCH MẠNG LƯỚI 5 MÁY CHỦ THEO THỨ TỰ XOAY TUA
-    api_servers = [
-        {"name": "Máy chủ Chính (API 1)", "func": call_api_1_scrapper},
-        {"name": "Máy chủ Dự phòng 2 (API 2)", "func": call_api_2_social_media},
-        {"name": "Máy chủ Dự phòng 3 (API 3)", "func": call_api_3_tiktok_api23},
-        {"name": "Máy chủ Không Logo (API 4)", "func": call_api_4_no_watermark2},
-        {"name": "Máy chủ 7scorp (API 5)", "func": call_api_5_7scorp}
-    ]
+    # DANH SÁCH MẠNG LƯỚI API THEO LOẠI LINK
+    if is_tiktok:
+        # 5 máy chủ TikTok xoay tua
+        api_servers = [
+            {"name": "Máy chủ Chính (API 1)", "func": call_api_1_scrapper},
+            {"name": "Máy chủ Dự phòng 2 (API 2)", "func": call_api_2_social_media},
+            {"name": "Máy chủ Dự phòng 3 (API 3)", "func": call_api_3_tiktok_api23},
+            {"name": "Máy chủ Không Logo (API 4)", "func": call_api_4_no_watermark2},
+            {"name": "Máy chủ 7scorp (API 5)", "func": call_api_5_7scorp}
+        ]
+    else:
+        # 1 máy chủ Facebook
+        api_servers = [
+            {"name": "Facebook Server (mahmudul)", "func": call_fb_api_mahmudul}
+        ]
 
     video_link, caption = None, None
 
@@ -492,8 +555,11 @@ def handle_message(message):
         except Exception as e:
             bot.edit_message_text(f"❌ Lỗi khi tải video lên Telegram: {e}", chat_id=message.chat.id, message_id=status_msg.message_id)
     else:
-        bot.edit_message_text("💥 Toàn bộ hệ thống 5 máy chủ đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!", 
-                              chat_id=message.chat.id, message_id=status_msg.message_id)
+        if is_tiktok:
+            error_msg = "💥 Toàn bộ hệ thống 5 máy chủ TikTok đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!"
+        else:
+            error_msg = "💥 Máy chủ Facebook không phản hồi link này. Hãy thử lại sau!"
+        bot.edit_message_text(error_msg, chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
 if __name__ == "__main__":
