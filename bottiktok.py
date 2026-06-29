@@ -471,6 +471,40 @@ def call_fb_api_social_download_all_in_one(fb_url):
     return None, None
 
 
+def call_fb_api_media_download_url(fb_url):
+    """FB Máy chủ 5: Facebook Media API (Lệnh POST - JSON Body cực xịn)"""
+    host = "facebook-media-api.p.rapidapi.com"
+    url = f"https://{host}/media/html"
+    
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host,
+        "Content-Type": "application/json"
+    }
+    
+    # Cấu trúc payload chứa url và cookie trống theo đúng ảnh test của bạn
+    payload = {
+        "url": fb_url,
+        "cookie": ""
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            
+            # Cào dữ liệu từ kết quả trả về
+            video_url = res_json.get('url') or res_json.get('download_url') or res_json.get('data', {}).get('url')
+            caption = res_json.get('title') or "Video tải từ Facebook Server 5 💎"
+            
+            if video_url:
+                print("[+] FB API 5 (Media API) bóc link thành công!")
+                return video_url, caption
+    except Exception as e:
+        print(f"[-] FB API 5 gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
@@ -614,12 +648,13 @@ def handle_message(message):
             {"name": "Máy chủ 7scorp (API 5)", "func": call_api_5_7scorp}
         ]
     else:
-        # 4 máy chủ Facebook xoay tua
+        # 5 máy chủ Facebook xoay tua
         api_servers = [
             {"name": "Facebook Server (mahmudul)", "func": call_fb_api_mahmudul},
             {"name": "Facebook Server 2 (Full Downloader)", "func": call_fb_api_full_downloader},
             {"name": "Facebook Server 3 (Social Media V3 HD)", "func": call_fb_api_social_media_v3},
-            {"name": "Facebook Server 4 (All In One POST)", "func": call_fb_api_social_download_all_in_one}
+            {"name": "Facebook Server 4 (All In One POST)", "func": call_fb_api_social_download_all_in_one},
+            {"name": "Facebook Server 5 (Media API)", "func": call_fb_api_media_download_url}
         ]
 
     video_link, caption = None, None
@@ -655,7 +690,7 @@ def handle_message(message):
         if is_tiktok:
             error_msg = "💥 Toàn bộ hệ thống 5 máy chủ TikTok đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!"
         else:
-            error_msg = "💥 Toàn bộ hệ thống 4 máy chủ Facebook đều không phản hồi link này. Hãy thử lại sau!"
+            error_msg = "💥 Toàn bộ hệ thống 5 máy chủ Facebook đều không phản hồi link này. Hãy thử lại sau!"
         bot.edit_message_text(error_msg, chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
