@@ -4,6 +4,8 @@ import telebot
 import threading
 import time
 import os
+import json
+from datetime import datetime, date
 from dotenv import load_dotenv
 from flask import Flask
 
@@ -20,6 +22,71 @@ def home():
 @app.route('/health')
 def health():
     return "OK", 200
+
+# =======================================================
+# HỆ THỐNG GIỚI HẠN SỬ DỤNG
+# =======================================================
+ADMIN_ID = 6762189023
+USAGE_FILE = "usage_data.json"
+DAILY_LIMIT = 5
+
+def load_usage_data():
+    """Đọc dữ liệu sử dụng từ file JSON"""
+    try:
+        if os.path.exists(USAGE_FILE):
+            with open(USAGE_FILE, 'r') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_usage_data(data):
+    """Lưu dữ liệu sử dụng vào file JSON"""
+    try:
+        with open(USAGE_FILE, 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"[-] Lỗi khi lưu dữ liệu sử dụng: {e}")
+
+def check_daily_limit(user_id):
+    """Kiểm tra user đã vượt giới hạn ngày chưa"""
+    # Admin không bị giới hạn
+    if user_id == ADMIN_ID:
+        return True, 0
+    
+    user_id_str = str(user_id)
+    today = str(date.today())
+    
+    data = load_usage_data()
+    
+    # Reset count nếu ngày mới
+    if user_id_str not in data or data[user_id_str].get('date') != today:
+        data[user_id_str] = {'date': today, 'count': 0}
+        save_usage_data(data)
+    
+    count = data[user_id_str]['count']
+    
+    if count >= DAILY_LIMIT:
+        return False, count
+    
+    return True, count
+
+def increment_usage(user_id):
+    """Tăng count sử dụng cho user"""
+    if user_id == ADMIN_ID:
+        return
+    
+    user_id_str = str(user_id)
+    today = str(date.today())
+    
+    data = load_usage_data()
+    
+    if user_id_str not in data or data[user_id_str].get('date') != today:
+        data[user_id_str] = {'date': today, 'count': 1}
+    else:
+        data[user_id_str]['count'] += 1
+    
+    save_usage_data(data)
 
 # =======================================================
 # CẤU HÌNH THÔNG TIN BOT VÀ TOKEN CHUNG
@@ -216,7 +283,19 @@ def send_welcome(message):
 
 @bot.message_handler(func=lambda message: message.text.startswith('http'))
 def handle_message(message):
+    user_id = message.from_user.id
     raw_url = message.text.strip()
+    
+    # Kiểm tra giới hạn sử dụng hàng ngày
+    can_use, current_count = check_daily_limit(user_id)
+    if not can_use:
+        limit_message = (
+            f"⚠️ Bạn đã dùng hết {DAILY_LIMIT} lượt tải video hôm nay!\n\n"
+            f"📊 Số lượt đã dùng: {current_count}/{DAILY_LIMIT}\n"
+            f"🔄 Hãy quay lại vào ngày mai để tiếp tục sử dụng!"
+        )
+        bot.reply_to(message, limit_message)
+        return
     
     # Kiểm tra link có phải TikTok hợp lệ không
     if not is_valid_tiktok_url(raw_url):
@@ -232,6 +311,9 @@ def handle_message(message):
         )
         bot.reply_to(message, error_message)
         return
+    
+    # Tăng count sử dụng
+    increment_usage(user_id)
     
     status_msg = bot.reply_to(message, "Process: 0%")
     

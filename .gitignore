@@ -23,6 +23,9 @@ wheels/
 # Environment variables
 .env
 
+# Usage data
+usage_data.json
+
 # IDE
 .vscode/
 .idea/
