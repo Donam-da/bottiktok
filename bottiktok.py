@@ -403,6 +403,39 @@ def call_fb_api_full_downloader(fb_url):
     return None, None
 
 
+def call_fb_api_social_media_v3(fb_url):
+    """FB Máy chủ 3: Social Media Video Downloader V3 (Có ép độ phân giải HD)"""
+    host = "social-media-video-downloader.p.rapidapi.com"
+    url = f"https://{host}/facebook/v3/post/details"
+    
+    # Thêm cấu hình renderableFormats để lấy video sắc nét nhất như Nam test trên web
+    querystring = {
+        "url": fb_url,
+        "renderableFormats": "720p,highres"
+    }
+    
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": host
+    }
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            
+            # Cấu trúc bóc tách JSON đặc trưng của nhà phát triển này
+            contents = res_json.get('contents', [])
+            if contents:
+                videos = contents[0].get('videos', [])
+                if videos:
+                    # Lấy link video trực tiếp lớp ngoài cùng
+                    video_url = videos[0].get('url')
+                    return video_url, "Video tải từ Facebook Server 3 💎"
+    except Exception as e:
+        print(f"[-] FB API 3 gặp sự cố: {e}")
+    return None, None
+
+
 # =======================================================
 # LOGIC ĐIỀU KHIỂN CHÍNH CỦA BOT TELEGRAM
 # =======================================================
@@ -546,10 +579,11 @@ def handle_message(message):
             {"name": "Máy chủ 7scorp (API 5)", "func": call_api_5_7scorp}
         ]
     else:
-        # 2 máy chủ Facebook xoay tua
+        # 3 máy chủ Facebook xoay tua
         api_servers = [
             {"name": "Facebook Server (mahmudul)", "func": call_fb_api_mahmudul},
-            {"name": "Facebook Server 2 (Full Downloader)", "func": call_fb_api_full_downloader}
+            {"name": "Facebook Server 2 (Full Downloader)", "func": call_fb_api_full_downloader},
+            {"name": "Facebook Server 3 (Social Media V3 HD)", "func": call_fb_api_social_media_v3}
         ]
 
     video_link, caption = None, None
@@ -585,7 +619,7 @@ def handle_message(message):
         if is_tiktok:
             error_msg = "💥 Toàn bộ hệ thống 5 máy chủ TikTok đều không phản hồi link này hoặc cụm tài khoản đã cạn kiệt quota tháng. Hãy thử lại sau!"
         else:
-            error_msg = "💥 Toàn bộ hệ thống 2 máy chủ Facebook đều không phản hồi link này. Hãy thử lại sau!"
+            error_msg = "💥 Toàn bộ hệ thống 3 máy chủ Facebook đều không phản hồi link này. Hãy thử lại sau!"
         bot.edit_message_text(error_msg, chat_id=message.chat.id, message_id=status_msg.message_id)
 
 
