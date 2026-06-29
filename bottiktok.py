@@ -908,6 +908,46 @@ def is_valid_youtube_url(url):
     return False
 
 
+@bot.message_handler(commands=['resetlimit'])
+def reset_user_limit(message):
+    """Reset limit cho user bất kỳ - Chỉ admin được dùng"""
+    user_id = message.from_user.id
+    
+    # Chỉ admin mới được dùng lệnh này
+    if user_id != ADMIN_ID:
+        bot.reply_to(message, "🚫 Chỉ Admin mới được sử dụng lệnh này!")
+        return
+    
+    # Lấy user_id cần reset từ message
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            bot.reply_to(message, "❌ Cú pháp: /resetlimit <user_id>\n\nVí dụ: /resetlimit 1234567890")
+            return
+        
+        target_user_id = int(args[1])
+        
+        # Reset usage data cho user
+        data = load_usage_data()
+        user_id_str = str(target_user_id)
+        
+        if user_id_str in data:
+            # Reset tất cả count về 0
+            data[user_id_str]['tiktok_count'] = 0
+            data[user_id_str]['facebook_count'] = 0
+            data[user_id_str]['youtube_count'] = 0
+            save_usage_data(data)
+            
+            bot.reply_to(message, f"✅ Đã reset limit cho user {target_user_id}!\n\n📊 TikTok: 0/4\n📘 Facebook: 0/2\n🎥 YouTube: 0/5")
+        else:
+            bot.reply_to(message, f"ℹ️ User {target_user_id} chưa có dữ liệu sử dụng nào.")
+            
+    except ValueError:
+        bot.reply_to(message, "❌ User_id phải là số nguyên!\n\nCú pháp: /resetlimit <user_id>")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Lỗi: {e}")
+
+
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     user_id = message.from_user.id
