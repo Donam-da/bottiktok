@@ -981,6 +981,16 @@ def reset_user_limit(message):
 def send_welcome(message):
     user_id = message.from_user.id
     
+    # Admin có thông báo riêng
+    if user_id == ADMIN_ID:
+        bot.reply_to(message, "👑 Xin chào Admin! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
+                              "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
+                              "📊 Limit: Không giới hạn (Admin)\n\n"
+                              "🔧 Các lệnh admin:\n"
+                              "• /resetlimit <user_id> - Reset limit cho user\n\n"
+                              "✅ Bạn có toàn quyền truy cập!")
+        return
+    
     # Kiểm tra xem user có bị block từ bot thông báo không
     if is_user_blocked(user_id):
         bot.reply_to(message, "🚫 Bạn đã bị chặn bởi Admin.\n\n"
@@ -997,15 +1007,15 @@ def send_welcome(message):
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
                               "📊 Limit:\n"
-                              "• TikTok: 4 video/ngày\n"
-                              "• Facebook: 2 video/ngày\n\n"
+                              "• TikTok: 4 video/24h\n"
+                              "• Facebook: 2 video/24h\n\n"
                               "✅ Bạn đã có pass bot thông báo!")
     elif is_user_public(user_id):
         # User public mode (user lạ tạm thời)
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
-                              "📊 Limit: 1 video/ngày (Dùng thử - Public Mode)\n\n"
-                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 4, Facebook 2 video/ngày\n"
+                              "📊 Limit: 1 video/24h (Dùng thử - Public Mode)\n\n"
+                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 4, Facebook 2 video/24h\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
@@ -1013,8 +1023,8 @@ def send_welcome(message):
         # User hoàn toàn lạ
         bot.reply_to(message, "👋 Xin chào! Hệ thống tải TikTok & Facebook Siêu Cấp đã sẵn sàng.\n\n"
                               "👉 Gửi link TikTok hoặc Facebook vào đây bot sẽ gửi bạn lại video không logo!\n\n"
-                              "📊 Limit: 1 video/ngày (Dùng thử)\n\n"
-                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 4, Facebook 2 video/ngày\n"
+                              "📊 Limit: 1 video/24h (Dùng thử)\n\n"
+                              "💎 Mua pass bot 15k/10d để nâng giới hạn lên TikTok 4, Facebook 2 video/24h\n"
                               "📞 Ib saler: @itisnotmyfault0\n\n"
                               "🖥️ Muốn sử dụng app tb trên máy mình\n"
                               "📞 Ib admin @hfnam04 (300k/nửa năm)", parse_mode="HTML")
