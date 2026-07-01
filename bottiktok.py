@@ -896,12 +896,18 @@ def is_valid_tiktok_url(url):
         r'https?://(www\.)?tiktok\.com/@[\w\.-]+/video/\d+',
         r'https?://(www\.)?tiktok\.com/t/[\w-]+',
         r'https?://(vm|vt)\.tiktok\.com/[\w-]+',
-        r'https?://(www\.)?tiktok\.com/[\w\.-]+/video/\d+'
+        r'https?://(www\.)?tiktok\.com/[\w\.-]+/video/\d+',
+        r'https?://(www\.)?tiktok\.com/@[\w\.-]+/photo/\d+'
     ]
     for pattern in tiktok_patterns:
         if re.match(pattern, url, re.IGNORECASE):
             return True
     return False
+
+
+def is_tiktok_photo(url):
+    """Kiểm tra xem link TikTok có phải là ảnh không"""
+    return bool(re.search(r'/photo/\d+', url, re.IGNORECASE))
 
 
 def is_valid_facebook_url(url):
@@ -1062,6 +1068,13 @@ def handle_message(message):
     
     print(f"[*] Debug: is_tiktok={is_tiktok}, is_facebook={is_facebook}, is_youtube={is_youtube}")
     print(f"[*] Debug: URL={raw_url}")
+    
+    # Nếu là link ảnh TikTok, thông báo không hỗ trợ
+    if is_tiktok and is_tiktok_photo(raw_url):
+        bot.reply_to(message, "🖼️ Bot hiện tại chỉ hỗ trợ tải video TikTok, không hỗ trợ tải ảnh!\n\n"
+                              "📱 Vui lòng gửi link video TikTok để tải video.\n\n"
+                              "💡 Mẹo: Nhấn nút Chia sẻ → Sao chép liên kết trên video TikTok.")
+        return
     
     # Nếu là YouTube, thông báo tính năng đang phát triển
     if is_youtube:
