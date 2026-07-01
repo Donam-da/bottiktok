@@ -403,7 +403,7 @@ def progress_bar(chat_id, message_id):
         if not progress_running:
             break
         try:
-            bot.edit_message_text(f"Process: {i}%", chat_id=chat_id, message_id=message_id)
+            bot.edit_message_text(f"Đang tải: {i}%", chat_id=chat_id, message_id=message_id)
             time.sleep(0.05)  # Delay nhỏ để tạo hiệu ứng mượt
         except Exception:
             break
@@ -1135,7 +1135,7 @@ def handle_message(message):
     # Tăng count sử dụng theo nền tảng
     increment_usage(user_id, platform)
     
-    status_msg = bot.reply_to(message, "Process: 0%")
+    status_msg = bot.reply_to(message, "Bắt đầu tải: 0%")
     
     # Bắt đầu chạy progress bar trong thread riêng biệt
     global progress_running
@@ -1201,7 +1201,7 @@ def handle_message(message):
     
     if video_link:
         try:
-            bot.edit_message_text("Process: 100%", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text("Sắp tải xong: 100%", chat_id=message.chat.id, message_id=status_msg.message_id)
             bot.send_video(chat_id=message.chat.id, video=video_link, caption=caption if caption else "🎬")
             bot.delete_message(message.chat.id, status_msg.message_id)
             print("[+] Đã gửi thành công video!")
